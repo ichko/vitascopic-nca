@@ -1,3 +1,3 @@
 BY
 
-![image](chia.png)
+![alt text](https://github.com/ichko/vitascopic-nca/blob/main/chia.png?raw=true)
