@@ -4,8 +4,11 @@ import torch.nn.functional as F
 
 
 class NeuralCA(nn.Module):
-    def alive(self, x):
-        return F.max_pool2d(x[:, :1, :, :], kernel_size=3, stride=1, padding=0) > 0.1
+    def alive(self, x, alive_threshold):
+        return (
+            F.max_pool2d(x[:, :1, :, :], kernel_size=3, stride=1, padding=0)
+            > alive_threshold
+        )
 
     @property
     def device(self):
@@ -16,8 +19,9 @@ class NeuralCA(nn.Module):
         channels,
         hidden_channels,
         fire_rate,
-        alive_masking,
+        alive_threshold,
         zero_initialization,
+        padding_type="circular",
     ) -> None:
         super().__init__()
         sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]) / 8
@@ -36,7 +40,8 @@ class NeuralCA(nn.Module):
             nn.Conv2d(hidden_channels, channels, kernel_size=1, bias=False),
         )
         self.fire_rate = fire_rate
-        self.alive_masking = alive_masking
+        self.alive_threshold = alive_threshold
+        self.padding_type = padding_type
 
         if zero_initialization:
             nn.init.zeros_(self.rule[-1].weight)
@@ -44,24 +49,23 @@ class NeuralCA(nn.Module):
     def forward(self, x, steps):
         seq = [x]
 
-        # pad_type = "circular"
-        pad_type = "constant"
-
         for _ in range(steps):
-            x_padded = F.pad(x, (1, 1, 1, 1), pad_type)
+            x_padded = F.pad(x, (1, 1, 1, 1), self.padding_type)
             pre_life_mask = self.alive(x_padded)
 
             delta = F.conv2d(
-                F.pad(x, (1, 1, 1, 1), pad_type),
+                F.pad(x, (1, 1, 1, 1), self.padding_type),
                 self.all_filters_batch,
                 groups=self.channels,
             )
             delta = self.rule(delta)
             x = x + delta
 
-            post_life_mask = self.alive(F.pad(x, (1, 1, 1, 1), pad_type))
+            post_life_mask = self.alive(
+                F.pad(x, (1, 1, 1, 1), self.padding_type), self.alive_threshold
+            )
             life_mask = (pre_life_mask & post_life_mask).to(x.dtype)
-            if self.alive_masking:
+            if self.alive_threshold > 0:
                 x = x * life_mask
 
             seq.append(x)
@@ -69,4 +73,4 @@ class NeuralCA(nn.Module):
         seq = torch.stack(seq)
         seq = seq.permute(1, 0, 2, 3, 4)
 
-        return seq
+        return seq  # (batch, time, channels, height, width)
