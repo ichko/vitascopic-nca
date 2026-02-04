@@ -1,21 +1,39 @@
 import matplotlib.pyplot as plt
-import mediapy as media
 import panel as pn
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 from vitascopic_nca.base_trainer import BaseTrainer
 from vitascopic_nca.decoder import Decoder
 from vitascopic_nca.nca import NeuralCA
+from vitascopic_nca.noise import Noiser
 from vitascopic_nca.utils import image_row, impact_frames, sequence_batch_to_html_gifs
 
 
-class SampleMsgGenerator:
+class SampleMsgGenerator(nn.Module):
     def __init__(self, msg_size, device):
+        super().__init__()
         self.msg_size = msg_size
         self.device = device
 
-    def __call__(self, batch_size):
-        return torch.randn(batch_size, self.msg_size).to(self.device)
+    def forward(self, batch_size):
+        x = torch.randn(batch_size, self.msg_size).to(self.device)
+        return x, x
+
+
+class EmbeddingMsgGenerator(nn.Module):
+    def __init__(self, msg_size, num_embeddings, device):
+        super().__init__()
+        self.msg_size = msg_size
+        self.num_embeddings = num_embeddings
+        self.device = device
+        self.embedding = nn.Embedding(num_embeddings, msg_size).to(device)
+
+    def forward(self, batch_size):
+        indices = torch.randint(0, self.num_embeddings, (batch_size,)).to(self.device)
+        embs = self.embedding(indices)
+        return embs, indices
 
 
 class Trainer(BaseTrainer):
@@ -23,7 +41,9 @@ class Trainer(BaseTrainer):
         super().__init__(config.checkpoint_path)
         self.decoder = Decoder(
             in_dim=config.in_dim,
-            latent_dim=config.channels,
+            latent_dim=(
+                config.channels if config.loss_type == "mse" else config.num_embs
+            ),
             n_layers=config.n_layers,
             hidden_dim=config.hidden_dim,
             pooling_fn=config.pooling_fn,
@@ -37,18 +57,24 @@ class Trainer(BaseTrainer):
             zero_initialization=config.zero_initialization,
             padding_type=config.padding_type,
             mass_conserving=config.mass_conserving,
+            beta=config.beta,
         ).to(config.device)
         self.config = config
         if config.loss_type == "mse":
             self.msg_generator = SampleMsgGenerator(config.channels, config.device)
         else:
-            raise NotImplementedError(f"Loss type {config.loss_type} not implemented.")
+            self.msg_generator = EmbeddingMsgGenerator(
+                config.channels, num_embeddings=config.num_embs, device=config.device
+            )
         self.history = []
         self.optim = torch.optim.Adam(
-            list(self.nca.parameters()) + list(self.decoder.parameters()),
+            list(self.nca.parameters())
+            + list(self.decoder.parameters())
+            + list(self.msg_generator.parameters()),
             lr=config.lr,
         )
         self.learning_steps = 0
+        self.noiser = Noiser()
 
     def _make_init_state(self, msg):
         state = torch.zeros(
@@ -72,15 +98,16 @@ class Trainer(BaseTrainer):
             l, r = steps
             steps = torch.randint(l, r, (1,)).item()
 
-        msg = self.msg_generator(self.config.batch_size)
+        msg, out = self.msg_generator(self.config.batch_size)
         msg[:, 0] = 1  # Otherwise alive masking will not alow it to grow
 
         initial_state = self._make_init_state(msg)
         out1 = self.nca(initial_state, steps=steps)
-        # out2 = self.nca(out1[:, -1], steps=steps // 2)
-        final_frame = out1[:, -1:, 0]
-        gaussian_noise = torch.randn_like(final_frame) * 0.1
-        noised_final_frame = final_frame + gaussian_noise
+        final_frame = out1[:, -1, :1]
+        # gaussian_noise = torch.randn_like(final_frame) * 0.1
+        # noised_final_frame = final_frame + gaussian_noise
+
+        noised_final_frame = self.noiser(final_frame)
         out_msg = self.decoder(noised_final_frame)
         frames = [final_frame]
         noised_frames = [noised_final_frame]
@@ -91,9 +118,7 @@ class Trainer(BaseTrainer):
         if self.config.loss_type == "mse":
             loss = torch.mean((out_msg - msg) ** 2)
         else:
-            raise NotImplementedError(
-                f"Loss type {self.config.loss_type} not implemented."
-            )
+            loss = F.cross_entropy(out_msg, out)
 
         if torch.is_grad_enabled():
             self.optim.zero_grad()
@@ -163,7 +188,9 @@ class Trainer(BaseTrainer):
     def display_mass_sanity_check(self, info):
         rollout = info["rollout"]
         mass_channel = rollout[:, :, 0]
-        mass_sums = mass_channel.view(mass_channel.shape[0], mass_channel.shape[1], -1).sum(dim=-1)
+        mass_sums = mass_channel.view(
+            mass_channel.shape[0], mass_channel.shape[1], -1
+        ).sum(dim=-1)
 
         normalized_mass_sums = mass_sums / (mass_sums[:, :1] + 1e-8)
 

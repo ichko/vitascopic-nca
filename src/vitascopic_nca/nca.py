@@ -25,6 +25,7 @@ class NeuralCA(nn.Module):
         zero_initialization,
         mass_conserving,
         padding_type="circular",
+        beta=1,
     ) -> None:
         super().__init__()
         sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]) / 8
@@ -46,6 +47,7 @@ class NeuralCA(nn.Module):
         self.alive_threshold = alive_threshold
         self.mass_conserving = mass_conserving
         self.padding_type = padding_type
+        self.beta = beta
 
         if zero_initialization:
             nn.init.zeros_(self.rule[-1].weight)
@@ -67,6 +69,7 @@ class NeuralCA(nn.Module):
                 affinity = delta[:, :1]
                 q = x[:, :1]
                 q_next = mass_conserving_update(
+                    beta=self.beta,
                     q=q,
                     affinity=affinity,
                     padding_type=self.padding_type,

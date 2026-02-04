@@ -11,14 +11,16 @@ class DefaultNCAConfig:
     fire_rate = 0.9
     alive_threshold = 0.1
     zero_initialization = True
-    mass_conserving = False
+    mass_conserving = True
     padding_type: Literal["circular", "constant"] = "circular"
+    beta = 50
+    num_embs = 5
 
 
 @dataclass(frozen=True)
 class DefaultOptimizationConfig:
-    loss_type: Literal["mse", "clf"] = "mse"
-    lr = 0.0005
+    loss_type: Literal["mse", "clf"] = "clf"
+    lr = 0.0001
     batch_size = 8
 
 
