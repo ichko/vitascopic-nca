@@ -52,7 +52,7 @@ class Trainer:
         
 
         if self.config.mass_conserving:
-            state[:, :, self.config.H // 2 - 4 : self.config.H // 2 + 4, self.config.W // 2 - 4 : self.config.W // 2 + 4, 0] = torch.tensor(1.0)
+            state[:, 0, self.config.H // 2 - 4 : self.config.H // 2 + 4, self.config.W // 2 - 4 : self.config.W // 2 + 4] = torch.tensor(1.0)
 
         state[:, :, self.config.H // 2, self.config.W // 2] = msg
 
