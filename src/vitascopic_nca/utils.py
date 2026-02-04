@@ -9,6 +9,10 @@ import mediapy as media
 from .nca import NeuralCA
 
 
+def impact_frames(inp):
+    # TODO: implement or remove if unused
+    raise NotImplementedError("repeat_dim is not implemented")
+
 def sequence_batch_to_html_gifs(
     tensor, width, height, return_html=False, columns=8, fps=20
 ):
