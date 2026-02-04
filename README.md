@@ -20,6 +20,9 @@ Finally, u_hat is compared to u through simple MSE.
 TODO:
 Maybe make decoder rotationally invariant?
 
+Okay, so what about noise in a radius, to make it interactive
+
+
 
 ![alt text](https://github.com/ichko/vitascopic-nca/blob/main/chia.jpg?raw=true)
 Brought to you by the chia team
