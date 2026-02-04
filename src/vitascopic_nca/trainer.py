@@ -1,11 +1,12 @@
 import matplotlib.pyplot as plt
+import mediapy as media
 import panel as pn
 import torch
 
 from vitascopic_nca.base_trainer import BaseTrainer
 from vitascopic_nca.decoder import Decoder
 from vitascopic_nca.nca import NeuralCA
-from vitascopic_nca.utils import impact_frames, sequence_batch_to_html_gifs
+from vitascopic_nca.utils import image_row, impact_frames, sequence_batch_to_html_gifs
 
 
 class SampleMsgGenerator:
@@ -51,12 +52,16 @@ class Trainer(BaseTrainer):
 
     def _make_init_state(self, msg):
         state = torch.zeros(
-                self.config.batch_size, self.nca.channels, self.config.H, self.config.W
-            ).to(self.config.device)
-        
+            self.config.batch_size, self.nca.channels, self.config.H, self.config.W
+        ).to(self.config.device)
 
         if self.config.mass_conserving:
-            state[:, 0, self.config.H // 2 - 4 : self.config.H // 2 + 4, self.config.W // 2 - 4 : self.config.W // 2 + 4] = torch.tensor(1.0)
+            state[
+                :,
+                0,
+                self.config.H // 2 - 4 : self.config.H // 2 + 4,
+                self.config.W // 2 - 4 : self.config.W // 2 + 4,
+            ] = torch.tensor(1.0)
 
         state[:, :, self.config.H // 2, self.config.W // 2] = msg
 
@@ -74,9 +79,11 @@ class Trainer(BaseTrainer):
         out1 = self.nca(initial_state, steps=steps)
         # out2 = self.nca(out1[:, -1], steps=steps // 2)
         final_frame = out1[:, -1:, 0]
-        gaussian_noise = torch.randn_like(final_frame) * 0.0
+        gaussian_noise = torch.randn_like(final_frame) * 0.1
         noised_final_frame = final_frame + gaussian_noise
         out_msg = self.decoder(noised_final_frame)
+        frames = [final_frame]
+        noised_frames = [noised_final_frame]
 
         mass_threshold = 2000.0
         total_mass_loss = 0.5 * torch.relu(final_frame.sum() - mass_threshold)
@@ -103,6 +110,8 @@ class Trainer(BaseTrainer):
             "output_msg": out_msg.detach().cpu(),
             "final_frame": final_frame.detach().cpu(),
             "rollout": torch.cat([out1], dim=1).detach().cpu(),
+            "frames": [f.detach().cpu() for f in frames],
+            "noised_frames": [f.detach().cpu() for f in noised_frames],
         }
 
         return info
@@ -131,6 +140,8 @@ class Trainer(BaseTrainer):
             Total mass: {info['final_frame'].sum().item():.4f}
             ```
             """,
+            pn.Column(*image_row(info["frames"], columns=to_show)),
+            pn.Column(*image_row(info["noised_frames"], columns=to_show)),
             pn.pane.HTML(
                 sequence_batch_to_html_gifs(
                     rollout,

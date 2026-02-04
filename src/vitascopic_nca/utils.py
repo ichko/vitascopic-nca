@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Union
 
 import mediapy as media
+import panel as pn
 import torch
 
 from vitascopic_nca.nca import NeuralCA
@@ -17,6 +18,22 @@ def impact_frames(x, ts, ns):
         x = torch.cat([x[:, : t + 1], repeated, x[:, t + 1 :]], dim=1)
 
     return x
+
+
+def image_row(frame_batches, columns):
+    return [
+        pn.pane.HTML(
+            media.show_images(
+                frame_batch[:, 0],
+                columns=columns,
+                width=100,
+                height=100,
+                cmap="viridis",
+                return_html=True,
+            )
+        )
+        for frame_batch in frame_batches
+    ]
 
 
 def sequence_batch_to_html_gifs(
