@@ -49,7 +49,7 @@ class NeuralCA(nn.Module):
 
         if zero_initialization:
             nn.init.zeros_(self.rule[-1].weight)
-
+            
     def forward(self, x, steps):
         seq = [x]
 
