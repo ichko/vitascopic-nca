@@ -1,3 +1,5 @@
+## Noisy Autodecoder on NCA
+
 Defining life is outside of the scope of this project, but most will agree: Life is symbiogenetic, low-entropic patterns that are robust to changes in their environment. This is true for bacteria, cells and elephants.  
 
 This project is about the automatic search for patterns of this kind, which is why we are presenting: The _VitaScope™_.
@@ -20,7 +22,7 @@ Finally, u_hat is compared to u through simple MSE.
 TODO:
 Maybe make decoder rotationally invariant?
 
-Okay, so what about noise in a radius, to make it interactive
+Okay, so what about noise in a radius, and make it interactive
 
 
 
