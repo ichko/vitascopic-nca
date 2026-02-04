@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Neural Cellular Automata Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: #050816;
+        color: #e5e7eb;
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .app-root {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 20px 24px;
+        background: rgba(15, 23, 42, 0.95);
+        border-radius: 16px;
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+        max-width: 920px;
+        width: 100%;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+      }
+
+      .title {
+        font-size: 1.15rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      .subtitle {
+        font-size: 0.8rem;
+        color: #9ca3af;
+      }
+
+      .controls-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 16px;
+        align-items: center;
+        font-size: 0.9rem;
+      }
+
+      .controls-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      label {
+        font-size: 0.85rem;
+        color: #d1d5db;
+      }
+
+      select,
+      button {
+        font: inherit;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        padding: 6px 12px;
+        background: rgba(15, 23, 42, 0.9);
+        color: #e5e7eb;
+        cursor: pointer;
+        outline: none;
+        transition: border-color 0.15s ease, background 0.15s ease,
+          transform 0.05s ease;
+      }
+
+      select:hover,
+      button:hover {
+        border-color: #f97316;
+      }
+
+      button.primary {
+        background: linear-gradient(135deg, #f97316, #ec4899);
+        border-color: transparent;
+        color: white;
+        font-weight: 500;
+        padding-inline: 16px;
+      }
+
+      button.primary.toggled {
+        filter: brightness(0.9);
+      }
+
+      button.secondary.toggled {
+        border-color: #22c55e;
+        background: rgba(22, 163, 74, 0.12);
+      }
+
+      button:active {
+        transform: translateY(1px);
+      }
+
+      .canvas-shell {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+      }
+
+      .canvas-wrapper {
+        position: relative;
+        border-radius: 12px;
+        padding: 12px;
+        background: radial-gradient(circle at top left, #1e293b, #020617 60%);
+        box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.9);
+      }
+
+      canvas {
+        display: block;
+        background: black;
+        border-radius: 8px;
+        image-rendering: pixelated;
+        width: 384px;
+        height: 384px;
+      }
+
+      .canvas-overlay-label {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        font-size: 0.7rem;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        color: #9ca3af;
+      }
+
+      .side-panel {
+        flex: 1;
+        min-width: 200px;
+        font-size: 0.8rem;
+        color: #9ca3af;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .metric-row {
+        display: flex;
+        justify-content: space-between;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+      }
+
+      .hint {
+        font-size: 0.75rem;
+        color: #6b7280;
+      }
+
+      @media (max-width: 768px) {
+        .app-root {
+          border-radius: 0;
+          min-height: 100vh;
+        }
+
+        .canvas-shell {
+          flex-direction: column;
+        }
+
+        canvas {
+          width: 320px;
+          height: 320px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app-root">
+      <header class="header">
+        <div>
+          <div class="title">Neural Cellular Automata</div>
+          <div class="subtitle">32×32 grid · JSON-exported models</div>
+        </div>
+      </header>
+
+      <section class="controls-row">
+        <div class="controls-group">
+          <label for="model-select">Model</label>
+          <select id="model-select"></select>
+        </div>
+
+        <div class="controls-group">
+          <button id="reset-btn" class="secondary">Reset</button>
+        </div>
+
+        <div class="controls-group">
+          <button id="play-pause-btn" class="primary toggled">
+            Pause
+          </button>
+        </div>
+
+        <div class="controls-group">
+          <button id="brush-toggle-btn" class="secondary toggled">
+            Brush: On
+          </button>
+        </div>
+      </section>
+
+      <section class="canvas-shell">
+        <div class="canvas-wrapper">
+          <canvas id="nca-canvas" width="32" height="32"></canvas>
+          <div class="canvas-overlay-label">Click to paint</div>
+        </div>
+        <aside class="side-panel">
+          <div>
+            <div class="metric-row">
+              <span>Resolution</span>
+              <span id="metric-res">32×32</span>
+            </div>
+            <div class="metric-row">
+              <span>Channels</span>
+              <span id="metric-channels">–</span>
+            </div>
+            <div class="metric-row">
+              <span>Steps</span>
+              <span id="metric-steps">0</span>
+            </div>
+          </div>
+          <div class="hint">
+            Brush mode adds a small activation vector at the clicked cell. Try
+            resetting and painting different regions while the model evolves.
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script type="module" src="./nca_app.js"></script>
+  </body>
+  </html>
+
+
