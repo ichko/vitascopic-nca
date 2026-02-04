@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import panel as pn
+import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -122,7 +123,8 @@ class Trainer(BaseTrainer):
         if self.config.loss_type == "mse":
             loss = torch.mean((out_msg - msg) ** 2)
         else:
-            loss = F.cross_entropy(out_msg, out)
+            # loss = F.cross_entropy(out_msg, out)
+            loss = F.mse_loss(out_msg, msg)
 
         if torch.is_grad_enabled():
             self.optim.zero_grad()
@@ -139,6 +141,7 @@ class Trainer(BaseTrainer):
             "output_msg": out_msg.detach().cpu(),
             "final_frame": final_frame.detach().cpu(),
             "rollout": torch.cat([out1], dim=1).detach().cpu(),
+            "msg": msg,
             "frames": [f.detach().cpu() for f in frames],
             "noised_frames": [f.detach().cpu() for f in noised_frames],
         }
@@ -159,6 +162,16 @@ class Trainer(BaseTrainer):
         rollout = impact_frames(rollout, ts=[0, steps], ns=[5, 20])
         rollout = rollout[:, :, 0]
 
+        def bar_plot(vec):
+            fig, ax = plt.subplots(figsize=(2, 1))
+            sns.barplot(x=list(range(len(vec))), y=vec)
+            ax.set_xticks([])
+            ax.set_ylabel("")
+            plt.close()
+            return pn.pane.Matplotlib(
+                fig, format="svg", width=100, height=80, tight=True
+            )
+
         return pn.Column(
             f"**Optimization Step (loss={info['loss']:.4f}, optim steps={self.learning_steps})**",
             pn.pane.Matplotlib(fig, format="svg", width=600, height=300, tight=True),
@@ -169,8 +182,9 @@ class Trainer(BaseTrainer):
             Total mass: {info['final_frame'].sum().item():.4f}
             ```
             """,
-            pn.Column(*image_row(info["frames"], columns=to_show)),
-            pn.Column(*image_row(info["noised_frames"], columns=to_show)),
+            pn.Row(*[bar_plot(info["input_msg"][i]) for i in range(to_show)]),
+            pn.Row(*image_row(info["frames"], columns=to_show)),
+            pn.Row(*image_row(info["noised_frames"], columns=to_show)),
             pn.pane.HTML(
                 sequence_batch_to_html_gifs(
                     rollout,

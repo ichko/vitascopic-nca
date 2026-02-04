@@ -41,6 +41,7 @@ def sequence_batch_to_html_gifs(
 ):
     tensor = tensor.detach().cpu().numpy()
     tensor = media.to_rgb(tensor, cmap="viridis", vmin=0, vmax=1)
+    tensor = tensor[:, :, :, :, :3]
 
     return media.show_videos(
         tensor,

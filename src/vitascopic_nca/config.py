@@ -14,7 +14,7 @@ class DefaultNCAConfig:
     mass_conserving = True
     padding_type: Literal["circular", "constant"] = "circular"
     beta = 50
-    num_embs = 5
+    num_embs = 2
 
 
 @dataclass(frozen=True)
