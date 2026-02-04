@@ -5,13 +5,23 @@ from pathlib import Path
 from typing import Union
 
 import mediapy as media
+import torch
 
-from .nca import NeuralCA
+from vitascopic_nca.nca import NeuralCA
 
 
-def impact_frames(inp):
-    # TODO: implement or remove if unused
-    raise NotImplementedError("repeat_dim is not implemented")
+def impact_frames(x, t, n: int):
+    B, T, C, H, W = x.shape
+
+    if not (0 <= t < T):
+        raise ValueError("timestep out of range")
+
+    frame = x[:, t : t + 1]
+    repeated = frame.repeat(1, n, 1, 1, 1)
+    out = torch.cat([x[:, : t + 1], repeated, x[:, t + 1 :]], dim=1)
+
+    return out
+
 
 def sequence_batch_to_html_gifs(
     tensor, width, height, return_html=False, columns=8, fps=20

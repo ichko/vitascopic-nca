@@ -31,6 +31,7 @@ class Trainer:
             alive_threshold=config.alive_threshold,
             zero_initialization=config.zero_initialization,
             padding_type=config.padding_type,
+            mass_conserving=config.mass_conserving,
         ).to(config.device)
         self.config = config
         if config.loss_type == "mse":
@@ -63,7 +64,7 @@ class Trainer:
         out1 = self.nca(initial_state, steps=steps)
         # out2 = self.nca(out1[:, -1], steps=steps // 2)
         final_frame = out1[:, -1:, 0]
-        gaussian_noise = torch.randn_like(final_frame) * 0.1
+        gaussian_noise = torch.randn_like(final_frame) * 0.0
         noised_final_frame = final_frame + gaussian_noise
         out_msg = self.decoder(noised_final_frame)
 
@@ -87,6 +88,7 @@ class Trainer:
             "steps": steps,
             "input_msg": msg.detach().cpu(),
             "output_msg": out_msg.detach().cpu(),
+            "final_frame": final_frame.detach().cpu(),
             "rollout": torch.cat([out1], dim=1).detach().cpu(),
         }
 

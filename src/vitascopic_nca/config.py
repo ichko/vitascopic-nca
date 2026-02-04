@@ -9,15 +9,16 @@ class DefaultNCAConfig:
     channels = 16
     hidden_channels = 128
     fire_rate = 0.9
-    alive_threshold = 0.3
+    alive_threshold = 0.1
     zero_initialization = True
+    mass_conserving = False
     padding_type: Literal["circular", "constant"] = "circular"
 
 
 @dataclass(frozen=True)
 class DefaultOptimizationConfig:
     loss_type: Literal["mse", "clf"] = "mse"
-    lr = 0.0002
+    lr = 0.0005
     batch_size = 8
 
 
