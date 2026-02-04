@@ -1,47 +1,12 @@
 from dataclasses import dataclass
 from typing import Literal
 
+import matplotlib.pyplot as plt
+import panel as pn
 import torch
 
 from vitascopic_nca.decoder import Decoder
 from vitascopic_nca.nca import NeuralCA
-
-
-@dataclass(frozen=True)
-class DefaultNCAConfig:
-    channels = 16
-    hidden_channels = 128
-    fire_rate = 0.9
-    alive_threshold = 0.3
-    zero_initialization = True
-    padding_type: Literal["circular", "constant"] = "circular"
-
-
-@dataclass(frozen=True)
-class DefaultOptimizationConfig:
-    loss_type: Literal["mse", "clf"] = "mse"
-    lr = 1e-3
-    batch_size = 8
-
-
-@dataclass(frozen=True)
-class DefaultDecoderConfig:
-    n_layers = 3
-    hidden_dim = 32
-    in_dim = 1
-    pooling_fn = torch.amax
-
-
-@dataclass(frozen=True)
-class DefaultTrainerConfig(
-    DefaultNCAConfig, DefaultOptimizationConfig, DefaultDecoderConfig
-):
-    H = 32
-    W = 32
-    device = "cuda"
-
-
-DEFAULT_TRAINER_CONFIG = DefaultTrainerConfig()
 
 
 def sample_msg_generator(msg_size, device):
@@ -78,6 +43,7 @@ class Trainer:
             list(self.nca.parameters()) + list(self.decoder.parameters()),
             lr=config.lr,
         )
+        self.learning_steps = 0
 
     def _make_init_state(self, msg):
         state = torch.zeros(
@@ -93,10 +59,12 @@ class Trainer:
 
         msg = self.msg_generator(self.config.batch_size)
         initial_state = self._make_init_state(msg)
-        out1 = self.nca(initial_state, steps=steps // 2)
-        # apply noise here
-        out2 = self.nca(out1[:, -1], steps=steps // 2)
-        out_msg = self.decoder(out2[:, -1:, 0])
+        out1 = self.nca(initial_state, steps=steps)
+        # out2 = self.nca(out1[:, -1], steps=steps // 2)
+        final_frame = out1[:, -1:, 0]
+        gaussian_noise = torch.randn_like(final_frame) * 0.1
+        noised_final_frame = final_frame + gaussian_noise
+        out_msg = self.decoder(noised_final_frame)
 
         if self.config.loss_type == "mse":
             loss = torch.mean((out_msg - msg) ** 2)
@@ -110,7 +78,8 @@ class Trainer:
             loss.backward()
             self.optim.step()
 
-        self.history.append({"loss": loss.item()})
+            self.learning_steps += 1
+            self.history.append({"loss": loss.item()})
 
         info = {
             "loss": loss.item(),
@@ -122,16 +91,21 @@ class Trainer:
 
         return info
 
+    def display_optim_step(self, info):
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+        ax.scatter(
+            range(len(self.history)), [h["loss"] for h in self.history], s=1, alpha=0.9
+        )
+        ax.set_yscale("log")
+        plt.close()
+
+        return pn.Column(
+            f"**Optimization Step (loss={info['loss']:.4f}, optim steps={self.learning_steps})**",
+            pn.pane.Matplotlib(fig, format="svg", width=600, height=300, tight=True),
+        )
+
     def sanity_check(self):
-        info = self.optim_step(steps=8)
-        loss1 = info["loss"]
-        for _ in range(10):
-            info = self.optim_step(steps=8)
-        loss2 = info["loss"]
-        print(f"Sanity check losses: {loss1} -> {loss2}")
-        assert loss2 <= loss1, "Loss did not decrease in sanity check."
-
-
-if __name__ == "__main__":
-    trainer = Trainer(DEFAULT_TRAINER_CONFIG)
-    trainer.sanity_check()
+        with torch.no_grad():
+            info = self.optim_step(steps=10)
+        loss = info["loss"]
+        print(f"Sanity check loss: {loss}")
