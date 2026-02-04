@@ -15,6 +15,7 @@ dependencies = [
     "mediapy>=1.2.6",
     "numpy>=2.4.2",
     "panel>=1.8.7",
+    "seaborn>=0.13.2",
     "torch>=2.10.0",
 ]
 
