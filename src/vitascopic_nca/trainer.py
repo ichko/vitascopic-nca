@@ -28,21 +28,25 @@ class DefaultOptimizationConfig:
 class DefaultDecoderConfig:
     n_layers = 3
     hidden_dim = 32
+    in_dim = 1
     pooling_fn = torch.amax
 
 
 @dataclass(frozen=True)
-class DefaultTrainerConfig(DefaultNCAConfig, DefaultOptimizationConfig):
+class DefaultTrainerConfig(
+    DefaultNCAConfig, DefaultOptimizationConfig, DefaultDecoderConfig
+):
     H = 32
     W = 32
+    device = "cuda"
 
 
 DEFAULT_TRAINER_CONFIG = DefaultTrainerConfig()
 
 
-def sample_msg_generator(msg_size):
+def sample_msg_generator(msg_size, device):
     def generator(batch_size):
-        return torch.randn(batch_size, msg_size)
+        return torch.randn(batch_size, msg_size).to(device)
 
     return generator
 
@@ -50,12 +54,12 @@ def sample_msg_generator(msg_size):
 class Trainer:
     def __init__(self, config):
         self.decoder = Decoder(
-            in_dim=config.channels,
+            in_dim=config.in_dim,
             latent_dim=config.channels,
             n_layers=config.n_layers,
             hidden_dim=config.hidden_dim,
             pooling_fn=config.pooling_fn,
-        )
+        ).to(config.device)
         self.nca = NeuralCA(
             channels=config.channels,
             hidden_channels=config.hidden_channels,
@@ -63,10 +67,10 @@ class Trainer:
             alive_threshold=config.alive_threshold,
             zero_initialization=config.zero_initialization,
             padding_type=config.padding_type,
-        )
+        ).to(config.device)
         self.config = config
         if config.loss_type == "mse":
-            self.msg_generator = sample_msg_generator(self.msg_size)
+            self.msg_generator = sample_msg_generator(config.channels, config.device)
         else:
             raise NotImplementedError(f"Loss type {config.loss_type} not implemented.")
         self.history = []
@@ -78,15 +82,8 @@ class Trainer:
     def _make_init_state(self, msg):
         state = torch.zeros(
             self.config.batch_size, self.nca.channels, self.config.H, self.config.W
-        )
-
-        state[
-            :,
-            :,
-            self.config.H // 2 : self.config.H // 2 + 1,
-            self.config.W // 2 : self.config.W // 2 + 1,
-        ] = msg
-
+        ).to(self.config.device)
+        state[:, :, self.config.H // 2 + 1, self.config.W // 2 + 1] = msg
         return state
 
     def optim_step(self, steps):
@@ -98,8 +95,8 @@ class Trainer:
         initial_state = self._make_init_state(msg)
         out1 = self.nca(initial_state, steps=steps // 2)
         # apply noise here
-        out2 = self.nca(out1, steps=steps // 2)
-        out_msg = self.decoder(out2[:, -1, 0])
+        out2 = self.nca(out1[:, -1], steps=steps // 2)
+        out_msg = self.decoder(out2[:, -1:, 0])
 
         if self.config.loss_type == "mse":
             loss = torch.mean((out_msg - msg) ** 2)
@@ -124,3 +121,17 @@ class Trainer:
         }
 
         return info
+
+    def sanity_check(self):
+        info = self.optim_step(steps=8)
+        loss1 = info["loss"]
+        for _ in range(10):
+            info = self.optim_step(steps=8)
+        loss2 = info["loss"]
+        print(f"Sanity check losses: {loss1} -> {loss2}")
+        assert loss2 <= loss1, "Loss did not decrease in sanity check."
+
+
+if __name__ == "__main__":
+    trainer = Trainer(DEFAULT_TRAINER_CONFIG)
+    trainer.sanity_check()

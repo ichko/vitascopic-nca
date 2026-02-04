@@ -1,6 +1,7 @@
+from typing import Callable
+
 import torch
 import torch.nn as nn
-from typing import Callable
 
 
 class Decoder(nn.Module):
@@ -20,16 +21,13 @@ class Decoder(nn.Module):
 
         layers.append(nn.Conv2d(in_dim, hidden_dim, kernel_size=3, padding=1))
         layers.append(nn.ReLU())
-        for _layer in range(n_layers - 2): # first and last we know what are 
+        for _layer in range(n_layers - 2):  # first and last we know what are
             layers.append(nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1))
             layers.append(nn.ReLU())
         layers.append(nn.Conv2d(hidden_dim, latent_dim, kernel_size=3, padding=1))
         self.conv = nn.Sequential(*layers)
 
-    def forward(
-        self,
-        x,
-    ):
+    def forward(self, x):
         """
         x: (B, in_dim, 32, 32) binary image
         """

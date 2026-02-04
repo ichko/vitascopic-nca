@@ -51,7 +51,7 @@ class NeuralCA(nn.Module):
 
         for _ in range(steps):
             x_padded = F.pad(x, (1, 1, 1, 1), self.padding_type)
-            pre_life_mask = self.alive(x_padded)
+            pre_life_mask = self.alive(x_padded, self.alive_threshold)
 
             delta = F.conv2d(
                 F.pad(x, (1, 1, 1, 1), self.padding_type),
