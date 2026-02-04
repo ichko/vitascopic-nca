@@ -9,7 +9,7 @@ import torch
 from .nca import NeuralCA
 
 
-def repeat_dim(inp):
+def impact_frames(inp):
     # TODO: implement or remove if unused
     raise NotImplementedError("repeat_dim is not implemented")
 

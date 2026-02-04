@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from vitascopic_nca.mass_conservation import mass_conserving_update
+
 
 class NeuralCA(nn.Module):
     def alive(self, x, alive_threshold):
@@ -21,6 +23,7 @@ class NeuralCA(nn.Module):
         fire_rate,
         alive_threshold,
         zero_initialization,
+        mass_conserving,
         padding_type="circular",
     ) -> None:
         super().__init__()
@@ -41,6 +44,7 @@ class NeuralCA(nn.Module):
         )
         self.fire_rate = fire_rate
         self.alive_threshold = alive_threshold
+        self.mass_conserving = mass_conserving
         self.padding_type = padding_type
 
         if zero_initialization:
@@ -59,7 +63,17 @@ class NeuralCA(nn.Module):
                 groups=self.channels,
             )
             delta = self.rule(delta)
-            x = x + delta
+            if self.mass_conserving:
+                affinity = delta[:, :1]
+                q = x[:, :1]
+                q_next = mass_conserving_update(
+                    q=q,
+                    affinity=affinity,
+                    padding_type=self.padding_type,
+                )
+                x = torch.cat([q_next, x[:, 1:] + delta[:, 1:]], dim=1)
+            else:
+                x = x + delta
 
             post_life_mask = self.alive(
                 F.pad(x, (1, 1, 1, 1), self.padding_type), self.alive_threshold
