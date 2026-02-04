@@ -49,7 +49,7 @@ class NeuralCA(nn.Module):
 
         if zero_initialization:
             nn.init.zeros_(self.rule[-1].weight)
-            
+
     def forward(self, x, steps):
         seq = [x]
 
@@ -78,8 +78,9 @@ class NeuralCA(nn.Module):
             post_life_mask = self.alive(
                 F.pad(x, (1, 1, 1, 1), self.padding_type), self.alive_threshold
             )
+
             life_mask = (pre_life_mask & post_life_mask).to(x.dtype)
-            if self.alive_threshold > 0:
+            if self.alive_threshold > 0 and not self.mass_conserving:
                 x = x * life_mask
 
             seq.append(x)

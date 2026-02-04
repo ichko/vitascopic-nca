@@ -159,3 +159,23 @@ class Trainer(BaseTrainer):
             info = self.optim_step(steps=10)
         loss = info["loss"]
         print(f"Sanity check loss: {loss}")
+
+    def display_mass_sanity_check(self, info):
+        rollout = info["rollout"]
+        mass_channel = rollout[:, :, 0]
+        mass_sums = mass_channel.view(mass_channel.shape[0], mass_channel.shape[1], -1).sum(dim=-1)
+
+        normalized_mass_sums = mass_sums / (mass_sums[:, :1] + 1e-8)
+
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+        for i in range(normalized_mass_sums.shape[0]):
+            ax.plot(normalized_mass_sums[i].numpy(), alpha=0.6)
+        ax.set_title("Mass channel sum over time")
+        ax.set_xlabel("Timestep")
+        ax.set_ylabel("Mass sum")
+        plt.close()
+
+        return pn.Column(
+            "**Mass Conservation Check**",
+            pn.pane.Matplotlib(fig, format="svg", width=600, height=300, tight=True),
+        )

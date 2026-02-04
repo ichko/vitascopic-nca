@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 EPS = 1e-8
 
-beta = 1.0
+beta = 5.0
 
 
 def mass_conserving_update(q, affinity, padding_type):
