@@ -1,6 +1,3 @@
-from dataclasses import dataclass
-from typing import Literal
-
 import matplotlib.pyplot as plt
 import panel as pn
 import torch
@@ -51,7 +48,7 @@ class Trainer:
         state = torch.zeros(
             self.config.batch_size, self.nca.channels, self.config.H, self.config.W
         ).to(self.config.device)
-        state[:, :, self.config.H // 2 + 1, self.config.W // 2 + 1] = msg
+        state[:, :, self.config.H // 2, self.config.W // 2] = msg
         return state
 
     def optim_step(self, steps):
@@ -60,6 +57,8 @@ class Trainer:
             steps = torch.randint(l, r, (1,)).item()
 
         msg = self.msg_generator(self.config.batch_size)
+        msg[:, 0] = 1  # Otherwise alive masking will not alow it to grow
+
         initial_state = self._make_init_state(msg)
         out1 = self.nca(initial_state, steps=steps)
         # out2 = self.nca(out1[:, -1], steps=steps // 2)
