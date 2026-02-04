@@ -2,20 +2,24 @@ import matplotlib.pyplot as plt
 import panel as pn
 import torch
 
+from vitascopic_nca.base_trainer import BaseTrainer
 from vitascopic_nca.decoder import Decoder
 from vitascopic_nca.nca import NeuralCA
-from vitascopic_nca.utils import sequence_batch_to_html_gifs
+from vitascopic_nca.utils import impact_frames, sequence_batch_to_html_gifs
 
 
-def sample_msg_generator(msg_size, device):
-    def generator(batch_size):
-        return torch.randn(batch_size, msg_size).to(device)
+class SampleMsgGenerator:
+    def __init__(self, msg_size, device):
+        self.msg_size = msg_size
+        self.device = device
 
-    return generator
+    def __call__(self, batch_size):
+        return torch.randn(batch_size, self.msg_size).to(self.device)
 
 
-class Trainer:
+class Trainer(BaseTrainer):
     def __init__(self, config):
+        super().__init__(config.checkpoint_path)
         self.decoder = Decoder(
             in_dim=config.in_dim,
             latent_dim=config.channels,
@@ -35,7 +39,7 @@ class Trainer:
         ).to(config.device)
         self.config = config
         if config.loss_type == "mse":
-            self.msg_generator = sample_msg_generator(config.channels, config.device)
+            self.msg_generator = SampleMsgGenerator(config.channels, config.device)
         else:
             raise NotImplementedError(f"Loss type {config.loss_type} not implemented.")
         self.history = []
@@ -67,6 +71,9 @@ class Trainer:
         gaussian_noise = torch.randn_like(final_frame) * 0.0
         noised_final_frame = final_frame + gaussian_noise
         out_msg = self.decoder(noised_final_frame)
+
+        mass_threshold = 2000.0
+        total_mass_loss = 0.5 * torch.relu(final_frame.sum() - mass_threshold)
 
         if self.config.loss_type == "mse":
             loss = torch.mean((out_msg - msg) ** 2)
@@ -103,6 +110,11 @@ class Trainer:
         plt.close()
 
         to_show = 8
+        steps = info["rollout"].shape[1] - 1
+        rollout = info["rollout"][:to_show, :, :1]
+        rollout = impact_frames(rollout, ts=[0, steps], ns=[5, 20])
+        rollout = rollout[:, :, 0]
+
         return pn.Column(
             f"**Optimization Step (loss={info['loss']:.4f}, optim steps={self.learning_steps})**",
             pn.pane.Matplotlib(fig, format="svg", width=600, height=300, tight=True),
@@ -110,15 +122,16 @@ class Trainer:
             ```
             Rollout min max : {info['rollout'].min().item():.4f}, {info['rollout'].max().item():.4f}
             Rollout mean std: {info['rollout'].mean().item():.4f}, {info['rollout'].std().item():.4f}
+            Total mass: {info['final_frame'].sum().item():.4f}
             ```
             """,
             pn.pane.HTML(
                 sequence_batch_to_html_gifs(
-                    info["rollout"],
+                    rollout,
                     columns=to_show,
                     width=100,
                     height=100,
-                    fps=10,
+                    fps=20,
                     return_html=True,
                 )
             ),

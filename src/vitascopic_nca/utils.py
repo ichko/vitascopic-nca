@@ -10,23 +10,19 @@ import torch
 from vitascopic_nca.nca import NeuralCA
 
 
-def impact_frames(x, t, n: int):
-    B, T, C, H, W = x.shape
+def impact_frames(x, ts, ns):
+    for t, n in reversed(list(zip(ts, ns))):
+        frame = x[:, t : t + 1]
+        repeated = frame.repeat(1, n, 1, 1, 1)
+        x = torch.cat([x[:, : t + 1], repeated, x[:, t + 1 :]], dim=1)
 
-    if not (0 <= t < T):
-        raise ValueError("timestep out of range")
-
-    frame = x[:, t : t + 1]
-    repeated = frame.repeat(1, n, 1, 1, 1)
-    out = torch.cat([x[:, : t + 1], repeated, x[:, t + 1 :]], dim=1)
-
-    return out
+    return x
 
 
 def sequence_batch_to_html_gifs(
     tensor, width, height, return_html=False, columns=8, fps=20
 ):
-    tensor = tensor[:, :, 0].detach().cpu().numpy()
+    tensor = tensor.detach().cpu().numpy()
     tensor = media.to_rgb(tensor, cmap="viridis", vmin=0, vmax=1)
 
     return media.show_videos(

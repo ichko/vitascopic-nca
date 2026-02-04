@@ -37,3 +37,4 @@ class DefaultTrainerConfig(
     H = 32
     W = 32
     device = "cuda"
+    checkpoint_path = "./checkpoints"
