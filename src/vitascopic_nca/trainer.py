@@ -47,9 +47,15 @@ class Trainer:
 
     def _make_init_state(self, msg):
         state = torch.zeros(
-            self.config.batch_size, self.nca.channels, self.config.H, self.config.W
-        ).to(self.config.device)
+                self.config.batch_size, self.nca.channels, self.config.H, self.config.W
+            ).to(self.config.device)
+        
+
+        if self.config.mass_conserving:
+            state[:, :, self.config.H // 2 - 4 : self.config.H // 2 + 4, self.config.W // 2 - 4 : self.config.W // 2 + 4, 0] = torch.tensor(1.0)
+
         state[:, :, self.config.H // 2, self.config.W // 2] = msg
+
         return state
 
     def optim_step(self, steps):
