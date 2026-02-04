@@ -6,6 +6,10 @@ import torch.nn.functional as F
 
 from vitascopic_nca.base_trainer import BaseTrainer
 from vitascopic_nca.decoder import Decoder
+from vitascopic_nca.entropy_metrics import (
+    global_entropy_over_time,
+    per_channel_entropy_over_time,
+)
 from vitascopic_nca.nca import NeuralCA
 from vitascopic_nca.noise import Noiser
 from vitascopic_nca.utils import image_row, impact_frames, sequence_batch_to_html_gifs
@@ -204,5 +208,29 @@ class Trainer(BaseTrainer):
 
         return pn.Column(
             "**Mass Conservation Check**",
+            pn.pane.Matplotlib(fig, format="svg", width=600, height=300, tight=True),
+        )
+
+    def display_entropy(self, info):
+        """Plot per-channel and global entropy over time for a single rollout sample."""
+        rollout = info["rollout"]  # (B, T, C, H, W)
+        sample = rollout[0]
+
+        H_global = global_entropy_over_time(sample).cpu().numpy()
+        H_channels = per_channel_entropy_over_time(sample).cpu().numpy()
+
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+        # for c in range(H_channels.shape[1]):
+        for c in range(3):  # remember only first 3 channels are shown
+            ax.plot(H_channels[:, c], alpha=0.6, label=f"Channel {c}")
+        ax.plot(H_global, color="black", linewidth=2, label="Global entropy")
+        ax.set_xlabel("Timestep")
+        ax.set_ylabel("Entropy")
+        ax.set_title("Entropy over time (sample 0)")
+        ax.legend(ncol=2, fontsize=8)
+        plt.close()
+
+        return pn.Column(
+            "**Entropy Check**",
             pn.pane.Matplotlib(fig, format="svg", width=600, height=300, tight=True),
         )

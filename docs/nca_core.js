@@ -36,17 +36,20 @@ export function renderStateToCanvas(state, channels, ctx) {
   const imageData = ctx.createImageData(size, size);
   const data = imageData.data;
 
+
+  let max = Math.max(...state);
+
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const base = (y * size + x) * channels;
       const outIdx = (y * size + x) * 4;
 
       const v = channels > 0 ? state[base + 0] : 0;
-      const on = v > 0.5 ? 255 : 0;
-
-      data[outIdx + 0] = on;
-      data[outIdx + 1] = on;
-      data[outIdx + 2] = on;
+      // const on = v > 0.5 ? 255 : 0;
+      const normalized = v / max;
+      data[outIdx + 0] = normalized * 255;
+      data[outIdx + 1] = normalized * 255;
+      data[outIdx + 2] = normalized * 255;
       data[outIdx + 3] = 255;
     }
   }

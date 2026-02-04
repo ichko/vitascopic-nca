@@ -143,9 +143,15 @@ def analyze_nca_run(
     plot_final_entropy_map(entropy_map)
 
 
+
+
+
+
 # ----------------------------
 # Example usage
 # ----------------------------
+
+
 
 if __name__ == "__main__":
     T, C, H, W = 32, 9, 64, 64
