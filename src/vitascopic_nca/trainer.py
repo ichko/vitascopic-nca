@@ -7,7 +7,7 @@ from vitascopic_nca.base_trainer import BaseTrainer
 from vitascopic_nca.decoder import Decoder
 from vitascopic_nca.nca import NeuralCA
 from vitascopic_nca.utils import impact_frames, sequence_batch_to_html_gifs
-from entropy_metrics import global_entropy_over_time, per_channel_entropy_over_time
+from vitascopic_nca.entropy_metrics import global_entropy_over_time, per_channel_entropy_over_time
 
 
 class SampleMsgGenerator:
