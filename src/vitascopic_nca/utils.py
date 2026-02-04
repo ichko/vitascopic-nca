@@ -4,14 +4,27 @@ import json
 from pathlib import Path
 from typing import Union
 
-import torch
+import mediapy as media
 
 from .nca import NeuralCA
 
 
-def repeat_dim(inp):
-    # TODO: implement or remove if unused
-    raise NotImplementedError("repeat_dim is not implemented")
+def sequence_batch_to_html_gifs(
+    tensor, width, height, return_html=False, columns=8, fps=20
+):
+    tensor = tensor[:, :, 0].detach().cpu().numpy()
+    tensor = media.to_rgb(tensor, cmap="viridis", vmin=0, vmax=1)
+
+    return media.show_videos(
+        tensor,
+        titles=[f"#{i}" for i in range(tensor.shape[0])],
+        fps=fps,
+        codec="gif",
+        columns=columns,
+        width=width,
+        height=height,
+        return_html=return_html,
+    )
 
 
 def export_neural_ca_to_json(
@@ -63,35 +76,34 @@ def export_neural_ca_to_json(
     assert hidden_c2 == hidden_channels, "conv2 in_channels must equal hidden_channels"
 
     data = {
-      "model_type": "NeuralCA",
-      "model_name": model_name,
-      "channels": int(model.channels),
-      "hidden_channels": int(hidden_channels),
-      "alive_threshold": float(model.alive_threshold),
-      "fire_rate": float(getattr(model, "fire_rate", 1.0)),
-      "padding_type": str(getattr(model, "padding_type", "circular")),
-      "rule": {
-        "conv1": {
-          "weight": conv1.weight.detach()
-          .cpu()
-          .numpy()
-          .reshape(hidden_channels, three_c)
-          .tolist(),
-          "bias": conv1.bias.detach().cpu().numpy().tolist(),
+        "model_type": "NeuralCA",
+        "model_name": model_name,
+        "channels": int(model.channels),
+        "hidden_channels": int(hidden_channels),
+        "alive_threshold": float(model.alive_threshold),
+        "fire_rate": float(getattr(model, "fire_rate", 1.0)),
+        "padding_type": str(getattr(model, "padding_type", "circular")),
+        "rule": {
+            "conv1": {
+                "weight": conv1.weight.detach()
+                .cpu()
+                .numpy()
+                .reshape(hidden_channels, three_c)
+                .tolist(),
+                "bias": conv1.bias.detach().cpu().numpy().tolist(),
+            },
+            "conv2": {
+                "weight": conv2.weight.detach()
+                .cpu()
+                .numpy()
+                .reshape(channels, hidden_channels)
+                .tolist(),
+            },
         },
-        "conv2": {
-          "weight": conv2.weight.detach()
-          .cpu()
-          .numpy()
-          .reshape(channels, hidden_channels)
-          .tolist(),
-        },
-      },
     }
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     with out_path.open("w", encoding="utf-8") as f:
-      json.dump(data, f, indent=2)
-
+        json.dump(data, f, indent=2)

@@ -17,7 +17,7 @@ class DefaultNCAConfig:
 @dataclass(frozen=True)
 class DefaultOptimizationConfig:
     loss_type: Literal["mse", "clf"] = "mse"
-    lr = 1e-3
+    lr = 0.0002
     batch_size = 8
 
 

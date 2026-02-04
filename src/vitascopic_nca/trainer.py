@@ -7,6 +7,7 @@ import torch
 
 from vitascopic_nca.decoder import Decoder
 from vitascopic_nca.nca import NeuralCA
+from vitascopic_nca.utils import sequence_batch_to_html_gifs
 
 
 def sample_msg_generator(msg_size, device):
@@ -24,6 +25,7 @@ class Trainer:
             n_layers=config.n_layers,
             hidden_dim=config.hidden_dim,
             pooling_fn=config.pooling_fn,
+            padding_type=config.padding_type,
         ).to(config.device)
         self.nca = NeuralCA(
             channels=config.channels,
@@ -86,7 +88,7 @@ class Trainer:
             "steps": steps,
             "input_msg": msg.detach().cpu(),
             "output_msg": out_msg.detach().cpu(),
-            "rollout": torch.cat([out1, out2], dim=1).detach().cpu(),
+            "rollout": torch.cat([out1], dim=1).detach().cpu(),
         }
 
         return info
@@ -99,9 +101,26 @@ class Trainer:
         ax.set_yscale("log")
         plt.close()
 
+        to_show = 8
         return pn.Column(
             f"**Optimization Step (loss={info['loss']:.4f}, optim steps={self.learning_steps})**",
             pn.pane.Matplotlib(fig, format="svg", width=600, height=300, tight=True),
+            f"""
+            ```
+            Rollout min max : {info['rollout'].min().item():.4f}, {info['rollout'].max().item():.4f}
+            Rollout mean std: {info['rollout'].mean().item():.4f}, {info['rollout'].std().item():.4f}
+            ```
+            """,
+            pn.pane.HTML(
+                sequence_batch_to_html_gifs(
+                    info["rollout"],
+                    columns=to_show,
+                    width=100,
+                    height=100,
+                    fps=10,
+                    return_html=True,
+                )
+            ),
         )
 
     def sanity_check(self):
