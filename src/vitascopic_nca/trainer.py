@@ -20,7 +20,6 @@ from vitascopic_nca.entropy_metrics import (
     spatial_mass_entropy_over_time,
 )
 from vitascopic_nca.stimuli import Stimuli
-
 from vitascopic_nca.noise import Noiser
 from vitascopic_nca.utils import (
     image_row,
@@ -102,7 +101,7 @@ class Trainer(BaseTrainer):
             self.config.batch_size, self.nca.channels, self.config.H, self.config.W
         ).to(self.config.device)
 
-        if self.config.mass_conserving != "no":
+        if self.config.mass_conserving == "normal":
             state[
                 :,
                 0,
@@ -110,6 +109,15 @@ class Trainer(BaseTrainer):
                 self.config.W // 2 - 4 : self.config.W // 2 + 4,
             ] = torch.tensor(1.0)
             # state[:, 0, :, :] = torch.tensor(1.0)  # start with uniform mass distribution
+        elif self.config.mass_conserving == "cross_channel":
+            state[
+                :,
+                0,
+                self.config.H // 2 - 4 : self.config.H // 2 + 4,
+                self.config.W // 2 - 4 : self.config.W // 2 + 4,
+            ] = torch.tensor(1.0)
+            state[:, 1, :, :] = torch.tensor(6.0)  # start with uniform mass distribution
+
 
         state[:, :, self.config.H // 2, self.config.W // 2] = msg
 
@@ -130,7 +138,10 @@ class Trainer(BaseTrainer):
         initial_state = self._make_init_state(msg)
         out1 = self.nca(initial_state, steps=steps)
         final_frame = out1[:, -1, :1]
-        noised_final_frame = self.noiser(final_frame)
+        # noised_final_frame = self.noiser(final_frame)
+
+        gaussian_noise = torch.randn_like(final_frame) * 0.5
+        noised_final_frame = final_frame + gaussian_noise
 
         # thresholded = (noised_final_frame >= 0.5).to(noised_final_frame.dtype)
 
