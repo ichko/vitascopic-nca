@@ -14,12 +14,12 @@ class DefaultNCAConfig:
     mass_conserving = True
     padding_type: Literal["circular", "constant"] = "circular"
     beta = 50
-    num_embs = 2
+    num_embs = 5
 
 
 @dataclass(frozen=True)
 class DefaultOptimizationConfig:
-    loss_type: Literal["mse", "clf"] = "clf"
+    loss_type: Literal["mse", "clf"] = "mse"
     lr = 0.0001
     batch_size = 8
 

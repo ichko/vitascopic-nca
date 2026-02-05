@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import pandas as pd
 import panel as pn
 import seaborn as sns
 import torch
@@ -13,7 +14,12 @@ from vitascopic_nca.entropy_metrics import (
 )
 from vitascopic_nca.nca import NeuralCA
 from vitascopic_nca.noise import Noiser
-from vitascopic_nca.utils import image_row, impact_frames, sequence_batch_to_html_gifs
+from vitascopic_nca.utils import (
+    image_row,
+    impact_frames,
+    plot_bars,
+    sequence_batch_to_html_gifs,
+)
 
 
 class SampleMsgGenerator(nn.Module):
@@ -110,31 +116,28 @@ class Trainer(BaseTrainer):
         initial_state = self._make_init_state(msg)
         out1 = self.nca(initial_state, steps=steps)
         final_frame = out1[:, -1, :1]
-        gaussian_noise = torch.randn_like(final_frame) * 0.0
-        noised_final_frame = final_frame + gaussian_noise
-        #noised_final_frame = self.noiser(final_frame)
+        noised_final_frame = self.noiser(final_frame)
 
-        #thresholded = (noised_final_frame >= 0.5).to(noised_final_frame.dtype)
+        # thresholded = (noised_final_frame >= 0.5).to(noised_final_frame.dtype)
 
-        if self.learning_steps % 300 == 0:
-            if self.zeroing_thr < -2:
-                self.zeroing_thr +=1
-            print(self.learning_steps, self.zeroing_thr)
+        # if self.learning_steps % 300 == 0:
+        #     if self.zeroing_thr < -2:
+        #         self.zeroing_thr += 1
+        #     print(self.learning_steps, self.zeroing_thr)
 
-        noised_final_frame[:,:,:self.zeroing_thr] = 0
+        # noised_final_frame[:, :, : self.zeroing_thr] = 0
         out_msg = self.decoder(noised_final_frame)
 
         frames = [final_frame]
         noised_frames = [noised_final_frame]
 
-        mass_threshold = 2000.0
-        total_mass_loss = 0.5 * torch.relu(final_frame.sum() - mass_threshold)
+        # mass_threshold = 2000.0
+        # total_mass_loss = 0.5 * torch.relu(final_frame.sum() - mass_threshold)
 
         if self.config.loss_type == "mse":
             loss = torch.mean((out_msg - msg) ** 2)
         else:
-            # loss = F.cross_entropy(out_msg, out)
-            loss = F.mse_loss(out_msg, msg)
+            loss = F.cross_entropy(out_msg, out)
 
         if torch.is_grad_enabled():
             self.optim.zero_grad()
@@ -172,19 +175,14 @@ class Trainer(BaseTrainer):
         rollout = impact_frames(rollout, ts=[0, steps], ns=[5, 20])
         rollout = rollout[:, :, 0]
 
-        def bar_plot(vec):
-            fig, ax = plt.subplots(figsize=(2, 1))
-            sns.barplot(x=list(range(len(vec))), y=vec)
-            ax.set_xticks([])
-            ax.set_ylabel("")
-            plt.close()
-            return pn.pane.Matplotlib(
-                fig, format="svg", width=100, height=80, tight=True
-            )
-
         return pn.Column(
             f"**Optimization Step (loss={info['loss']:.4f}, optim steps={self.learning_steps})**",
-            pn.pane.Matplotlib(fig, format="svg", width=600, height=300, tight=True),
+            pn.Row(
+                pn.pane.Matplotlib(
+                    fig, format="svg", width=500, height=250, tight=True
+                ),
+                self.display_mass(info),
+            ),
             f"""
             ```
             Rollout min max : {info['rollout'].min().item():.4f}, {info['rollout'].max().item():.4f}
@@ -192,7 +190,7 @@ class Trainer(BaseTrainer):
             Total mass: {info['final_frame'].sum().item():.4f}
             ```
             """,
-            pn.Row(*[bar_plot(info["input_msg"][i]) for i in range(to_show)]),
+            pn.Row(plot_bars(info["input_msg"][:to_show])),
             pn.Row(*image_row(info["frames"], columns=to_show)),
             pn.Row(*image_row(info["noised_frames"], columns=to_show)),
             pn.pane.HTML(
@@ -213,27 +211,32 @@ class Trainer(BaseTrainer):
         loss = info["loss"]
         print(f"Sanity check loss: {loss}")
 
-    def display_mass_sanity_check(self, info):
+    def display_mass(self, info, normalize=False):
         rollout = info["rollout"]
-        mass_channel = rollout[:, :, 0]
-        mass_sums = mass_channel.view(
-            mass_channel.shape[0], mass_channel.shape[1], -1
-        ).sum(dim=-1)
-
-        normalized_mass_sums = mass_sums / (mass_sums[:, :1] + 1e-8)
-
         fig, ax = plt.subplots(1, 1, figsize=(8, 4))
-        for i in range(normalized_mass_sums.shape[0]):
-            ax.plot(normalized_mass_sums[i].numpy(), alpha=0.6)
+
+        for dim in reversed(range(rollout.shape[2])):
+            mass_channel = rollout[:, :, dim]
+            mass_sums = mass_channel.view(
+                mass_channel.shape[0], mass_channel.shape[1], -1
+            ).sum(dim=-1)
+
+            if normalize:
+                mass_sums = mass_sums / (mass_sums[:, :1] + 1e-8)
+
+            for i in range(mass_sums.shape[0]):
+                ax.plot(
+                    mass_sums[i].numpy(),
+                    alpha=0.6 if i == 0 else 0.3,
+                    c="tab:orange" if dim == 0 else "tab:gray",
+                )
+
         ax.set_title("Mass channel sum over time")
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Mass sum")
         plt.close()
 
-        return pn.Column(
-            "**Mass Conservation Check**",
-            pn.pane.Matplotlib(fig, format="svg", width=600, height=300, tight=True),
-        )
+        return pn.pane.Matplotlib(fig, format="svg", width=500, height=250, tight=True)
 
     def display_entropy(self, info):
         """Plot per-channel and global entropy over time for a single rollout sample."""
