@@ -4,8 +4,12 @@ import json
 from pathlib import Path
 from typing import Union
 
+import matplotlib.pyplot as plt
 import mediapy as media
+import numpy as np
+import pandas as pd
 import panel as pn
+import seaborn as sns
 import torch
 
 from vitascopic_nca.nca import NeuralCA
@@ -36,11 +40,49 @@ def image_row(frame_batches, columns):
     ]
 
 
+def plot_bars(batched_vecs):
+    B, D = batched_vecs.shape
+    df = pd.DataFrame(
+        {
+            "batch": np.repeat(np.arange(B), D),
+            "dim": np.tile(np.arange(D), B),
+            "value": batched_vecs.reshape(-1),
+        }
+    )
+
+    g = sns.catplot(
+        data=df,
+        kind="bar",
+        x="dim",
+        y="value",
+        col="batch",
+        sharey=True,
+        height=2,
+        aspect=1.1,
+    )
+
+    for ax in g.axes.flat:
+        ax.set_ylabel(None)
+
+    for ax in g.axes.flat:
+        ax.set_xlabel("")
+        ax.set_xticks([])
+        ax.tick_params(bottom=False)
+
+    g.set_titles("")
+
+    fig = g.figure
+    plt.close(fig)
+
+    return pn.pane.Matplotlib(fig, format="svg", width=50 * D, height=100, tight=True)
+
+
 def sequence_batch_to_html_gifs(
     tensor, width, height, return_html=False, columns=8, fps=20
 ):
     tensor = tensor.detach().cpu().numpy()
     tensor = media.to_rgb(tensor, cmap="viridis", vmin=0, vmax=1)
+    tensor = tensor[:, :, :, :, :3]
 
     return media.show_videos(
         tensor,

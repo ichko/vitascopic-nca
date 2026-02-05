@@ -25,7 +25,8 @@ class NeuralCA(nn.Module):
         zero_initialization,
         mass_conserving,
         padding_type="circular",
-    ) -> None:        
+        beta=1,
+    ) -> None:
         super().__init__()
         sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]) / 8
         sobel_y = torch.tensor([[1, 2, 1], [0, 0, 0], [-1, -2, -1]]) / 8
@@ -46,6 +47,7 @@ class NeuralCA(nn.Module):
         self.alive_threshold = alive_threshold
         self.mass_conserving = mass_conserving
         self.padding_type = padding_type
+        self.beta = beta
 
         assert mass_conserving in ["no", "normal", "cross_channel"], "Bad mass_conserving option"
 
@@ -70,6 +72,7 @@ class NeuralCA(nn.Module):
                 affinity = delta[:, :1]
                 q = x[:, :1]
                 q_next = mass_conserving_update(
+                    beta=self.beta,
                     q=q,
                     affinity=affinity,
                     padding_type=self.padding_type,
@@ -79,6 +82,7 @@ class NeuralCA(nn.Module):
                 affinity_0 = delta[:, :1]
                 q = x[:, :1]
                 q_next = mass_conserving_update(
+                    beta=self.beta,
                     q=q,
                     affinity=affinity_0,
                     padding_type=self.padding_type,
@@ -86,11 +90,12 @@ class NeuralCA(nn.Module):
 
                 affinities = delta[:,1:]
                 q_next_w_cross = cross_channel_mass_conserving_update(
+                    beta=self.beta,
                     qs=x[:,1:],
                     affinities=affinities,
                     padding_type=self.padding_type,
                 )
-                
+
                 x = torch.cat([q_next, q_next_w_cross], dim=1)
             else:
                 x = x + delta
