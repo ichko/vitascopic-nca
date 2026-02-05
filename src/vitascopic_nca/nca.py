@@ -2,7 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from vitascopic_nca.mass_conservation import mass_conserving_update, cross_channel_mass_conserving_update
+from vitascopic_nca.mass_conservation import (
+    cross_channel_mass_conserving_update,
+    mass_conserving_update,
+)
 
 
 class NeuralCA(nn.Module):
@@ -49,8 +52,11 @@ class NeuralCA(nn.Module):
         self.padding_type = padding_type
         self.beta = beta
 
-        assert mass_conserving in ["no", "normal", "cross_channel"], "Bad mass_conserving option"
-
+        assert mass_conserving in [
+            "no",
+            "normal",
+            "cross_channel",
+        ], "Bad mass_conserving option"
 
         if zero_initialization:
             nn.init.zeros_(self.rule[-1].weight)
@@ -88,10 +94,10 @@ class NeuralCA(nn.Module):
                     padding_type=self.padding_type,
                 )
 
-                affinities = delta[:,1:]
+                affinities = delta[:, 1:]
                 q_next_w_cross = cross_channel_mass_conserving_update(
                     beta=self.beta,
-                    qs=x[:,1:],
+                    qs=x[:, 1:],
                     affinities=affinities,
                     padding_type=self.padding_type,
                 )
@@ -99,6 +105,7 @@ class NeuralCA(nn.Module):
                 x = torch.cat([q_next, q_next_w_cross], dim=1)
             else:
                 x = x + delta
+            torch.clip_(x, -2, 2)
 
             post_life_mask = self.alive(
                 F.pad(x, (1, 1, 1, 1), self.padding_type), self.alive_threshold

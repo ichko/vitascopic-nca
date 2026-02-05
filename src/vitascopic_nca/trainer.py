@@ -135,22 +135,19 @@ class Trainer(BaseTrainer):
 
         initial_state = self._make_init_state(msg)
 
-        stimuli = Stimuli(initial_state=initial_state)
-
+        # stimuli = Stimuli(initial_state=initial_state)
         # out1 = self.nca(initial_state, steps=5)
-
         # out1_usable = out1[:,-1]
-        stim = stimuli.add_stimuli(initial_state)
+        # stim = stimuli.add_stimuli(initial_state)
 
-        out1 = self.nca(stim, steps=steps)
+        out1 = self.nca(initial_state, steps=steps)
 
         final_frame = out1[:, -1, :1]
-        middle_frame = out1[:, 10, :1]
 
         noisesize = torch.sqrt(final_frame)
         gaussian_noise = torch.randn_like(final_frame) * noisesize
 
-        final_frame = stimuli.add_stimuli_noise(final_frame=final_frame)
+        # final_frame = stimuli.add_stimuli_noise(final_frame=final_frame)
 
         noised_final_frame = final_frame + gaussian_noise * 0.001
 
@@ -162,7 +159,6 @@ class Trainer(BaseTrainer):
         #     print(self.learning_steps, self.zeroing_thr)
 
         # noised_final_frame[:, :, : self.zeroing_thr] = 0
-        middle_out_msg = self.decoder(middle_frame)
         out_msg = self.decoder(noised_final_frame)
 
         frames = [final_frame]
@@ -172,7 +168,7 @@ class Trainer(BaseTrainer):
         # total_mass_loss = 0.5 * torch.relu(final_frame.sum() - mass_threshold)
 
         if self.config.loss_type == "mse":
-            loss = F.mse_loss(out_msg, msg) + F.mse_loss(middle_out_msg, msg)
+            loss = F.mse_loss(out_msg, msg)
         else:
             loss = F.cross_entropy(out_msg, out)
 
