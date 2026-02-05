@@ -25,19 +25,31 @@ def impact_frames(x, ts, ns):
 
 
 def image_row(frame_batches, columns):
-    return [
-        pn.pane.HTML(
-            media.show_images(
-                frame_batch[:, 0],
-                columns=columns,
-                width=100,
-                height=100,
-                cmap="viridis",
-                return_html=True,
+    return pn.Row(
+        *[
+            pn.pane.HTML(
+                media.show_images(
+                    frame_batch[:, 0],
+                    columns=columns,
+                    width=100,
+                    height=100,
+                    cmap="viridis",
+                    return_html=True,
+                )
             )
-        )
-        for frame_batch in frame_batches
-    ]
+            for frame_batch in frame_batches
+        ]
+    )
+
+
+def tensor_summary(T):
+    if type(T) is not torch.Tensor:
+        T = torch.tensor([v for t in T for v in t.detach().cpu().flatten()])
+
+    T = T.detach().cpu().flatten().numpy()
+    return (
+        f"[{np.min(T):.4f}, {np.max(T):.4f}] μ = {np.mean(T):.4f}, σ = {np.std(T):.4f}"
+    )
 
 
 def plot_bars(batched_vecs):

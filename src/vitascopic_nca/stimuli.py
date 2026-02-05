@@ -1,9 +1,6 @@
 import torch
 
 
-
-
-
 class Stimuli:
     """Class to represent stimuli for the NCA. For simplicity, we just use random noise as stimuli."""
 

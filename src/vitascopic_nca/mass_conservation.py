@@ -59,10 +59,12 @@ def cross_channel_mass_conserving_update(beta, qs, affinities, padding_type):
 if __name__ == "__main__":
     example_q = torch.randn((1, 1, 8, 8))
     example_affinity = torch.randn((1, 1, 8, 8))
-    beta = 5.
+    beta = 5.0
     print("q shape before update:")
     print(example_q.shape)
-    updated_q = mass_conserving_update(beta, example_q, example_affinity, padding_type="circular")
+    updated_q = mass_conserving_update(
+        beta, example_q, example_affinity, padding_type="circular"
+    )
     print("q shape after update:")
     print(updated_q.shape)
 
@@ -70,6 +72,8 @@ if __name__ == "__main__":
     example_affinities = torch.randn((1, 2, 8, 8))
     print("qs shape before update:")
     print(example_qs.shape)
-    updated_qs = cross_channel_mass_conserving_update(beta, example_qs, example_affinities, padding_type="circular")
+    updated_qs = cross_channel_mass_conserving_update(
+        beta, example_qs, example_affinities, padding_type="circular"
+    )
     print("qs shape after update:")
     print(updated_qs.shape)

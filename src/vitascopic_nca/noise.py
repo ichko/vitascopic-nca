@@ -4,7 +4,7 @@ import kornia
 class Noiser:
     def __init__(self):
         self.noise = kornia.augmentation.AugmentationSequential(
-            kornia.augmentation.RandomGaussianNoise(mean=0.0, std=0.1, p=1),
+            # kornia.augmentation.RandomGaussianNoise(mean=0.0, std=0.2, p=1),
             kornia.augmentation.RandomAffine(
                 degrees=10,
                 translate=[0.5, 0.5],

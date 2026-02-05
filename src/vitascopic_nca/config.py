@@ -11,7 +11,7 @@ class DefaultNCAConfig:
     fire_rate = 0.9
     alive_threshold = 0.1
     zero_initialization = True
-    mass_conserving = True
+    mass_conserving: Literal["no", "normal", "cross_channel"] = "normal"
     padding_type: Literal["circular", "constant"] = "circular"
     beta = 50
     num_embs = 5
@@ -40,4 +40,3 @@ class DefaultTrainerConfig(
     W = 32
     device = "cuda"
     checkpoint_path = "./checkpoints"
-    mass_conserving = True
