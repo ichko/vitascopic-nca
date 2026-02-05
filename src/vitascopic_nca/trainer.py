@@ -134,13 +134,25 @@ class Trainer(BaseTrainer):
         msg[:, 0] = 1  # Otherwise alive masking will not alow it to grow
 
         initial_state = self._make_init_state(msg)
-        out1 = self.nca(initial_state, steps=steps)
+
+        stimuli = Stimuli(initial_state=initial_state)
+
+        # out1 = self.nca(initial_state, steps=5)
+
+        # out1_usable = out1[:,-1]
+        stim = stimuli.add_stimuli(initial_state)
+
+        out1 = self.nca(stim, steps=steps)
+
         final_frame = out1[:, -1, :1]
         middle_frame = out1[:, 10, :1]
 
-        # noised_final_frame = self.noiser(final_frame)
-        gaussian_noise = torch.randn_like(final_frame) * (final_frame ** (1 / 3))
-        noised_final_frame = final_frame + gaussian_noise
+        noisesize = torch.sqrt(final_frame)
+        gaussian_noise = torch.randn_like(final_frame) * noisesize
+
+        final_frame = stimuli.add_stimuli_noise(final_frame=final_frame)
+
+        noised_final_frame = final_frame + gaussian_noise * 0.001
 
         # thresholded = (noised_final_frame >= 0.5).to(noised_final_frame.dtype)
 
