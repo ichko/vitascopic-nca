@@ -52,31 +52,45 @@ def tensor_summary(T):
     )
 
 
-def plot_bars(batched_vecs):
-    B, D = batched_vecs.shape
-    df = pd.DataFrame(
+def plot_bars(batch1, batch2):
+    B, D = batch1.shape
+    df1 = pd.DataFrame(
         {
             "batch": np.repeat(np.arange(B), D),
             "dim": np.tile(np.arange(D), B),
-            "value": batched_vecs.reshape(-1),
+            "value": batch1.reshape(-1),
+            "source": "batch1",
         }
     )
+    df2 = pd.DataFrame(
+        {
+            "batch": np.repeat(np.arange(B), D),
+            "dim": np.tile(np.arange(D), B),
+            "value": batch2.reshape(-1),
+            "source": "batch2",
+        }
+    )
+
+    df = pd.concat([df1, df2], axis=0)
 
     g = sns.catplot(
         data=df,
         kind="bar",
         x="dim",
         y="value",
+        hue="source",
         col="batch",
         sharey=True,
-        height=2,
-        aspect=1.1,
+        height=1.8,
+        aspect=0.9,
+        alpha=0.8,  # transparency
+        dodge=False,  # stack on top of each other
+        legend=False,
     )
 
+    # Clean up axes
     for ax in g.axes.flat:
         ax.set_ylabel(None)
-
-    for ax in g.axes.flat:
         ax.set_xlabel("")
         ax.set_xticks([])
         ax.tick_params(bottom=False)
@@ -86,7 +100,7 @@ def plot_bars(batched_vecs):
     fig = g.figure
     plt.close(fig)
 
-    return pn.pane.Matplotlib(fig, format="svg", width=50 * D, height=100, tight=True)
+    return pn.pane.Matplotlib(fig, format="svg", width=50 * D, height=110, tight=True)
 
 
 def sequence_batch_to_html_gifs(

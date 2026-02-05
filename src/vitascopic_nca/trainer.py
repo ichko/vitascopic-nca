@@ -136,9 +136,10 @@ class Trainer(BaseTrainer):
         initial_state = self._make_init_state(msg)
         out1 = self.nca(initial_state, steps=steps)
         final_frame = out1[:, -1, :1]
+        middle_frame = out1[:, 10, :1]
 
         # noised_final_frame = self.noiser(final_frame)
-        gaussian_noise = torch.randn_like(final_frame) * (final_frame ** (1 / 3)) / 2.5
+        gaussian_noise = torch.randn_like(final_frame) * (final_frame ** (1 / 3))
         noised_final_frame = final_frame + gaussian_noise
 
         # thresholded = (noised_final_frame >= 0.5).to(noised_final_frame.dtype)
@@ -149,6 +150,7 @@ class Trainer(BaseTrainer):
         #     print(self.learning_steps, self.zeroing_thr)
 
         # noised_final_frame[:, :, : self.zeroing_thr] = 0
+        middle_out_msg = self.decoder(middle_frame)
         out_msg = self.decoder(noised_final_frame)
 
         frames = [final_frame]
@@ -158,7 +160,7 @@ class Trainer(BaseTrainer):
         # total_mass_loss = 0.5 * torch.relu(final_frame.sum() - mass_threshold)
 
         if self.config.loss_type == "mse":
-            loss = torch.mean((out_msg - msg) ** 2)
+            loss = F.mse_loss(out_msg, msg) + F.mse_loss(middle_out_msg, msg)
         else:
             loss = F.cross_entropy(out_msg, out)
 
@@ -228,7 +230,7 @@ class Trainer(BaseTrainer):
                         return_html=True,
                     )
                 ),
-                pn.Row(plot_bars(info["input_msg"][:to_show])),
+                plot_bars(info["input_msg"][:to_show], info["output_msg"][:to_show]),
                 image_row([f[:to_show] for f in info["frames"]], columns=to_show),
                 image_row(
                     [f[:to_show] for f in info["noised_frames"]], columns=to_show

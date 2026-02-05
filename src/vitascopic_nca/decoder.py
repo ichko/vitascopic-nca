@@ -21,9 +21,9 @@ class Decoder(nn.Module):
         self.padding_type = padding_type
 
         convs = []
-        convs.append(nn.Conv2d(in_dim, hidden_dim, kernel_size=3, padding=0))
+        convs.append(nn.Conv2d(in_dim, hidden_dim, kernel_size=5, padding=0))
         for _layer in range(n_layers - 2):  # first and last are known
-            convs.append(nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding=0))
+            convs.append(nn.Conv2d(hidden_dim, hidden_dim, kernel_size=5, padding=0))
         convs.append(nn.Conv2d(hidden_dim, latent_dim, kernel_size=3, padding=0))
         self.convs = nn.ModuleList(convs)
         self.activation = nn.ReLU()
