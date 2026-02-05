@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import panel as pn
 import seaborn as sns
@@ -11,21 +12,17 @@ from vitascopic_nca.decoder import Decoder
 from vitascopic_nca.entropy_metrics import (
     global_entropy_over_time,
     per_channel_entropy_over_time,
-)
-from vitascopic_nca.nca import NeuralCA
-from vitascopic_nca.utils import impact_frames, sequence_batch_to_html_gifs, image_row
-from vitascopic_nca.entropy_metrics import (
-    global_entropy_over_time,
-    per_channel_entropy_over_time,
     spatial_mass_entropy_over_time,
 )
-from vitascopic_nca.stimuli import Stimuli
+from vitascopic_nca.nca import NeuralCA
 from vitascopic_nca.noise import Noiser
+from vitascopic_nca.stimuli import Stimuli
 from vitascopic_nca.utils import (
     image_row,
     impact_frames,
     plot_bars,
     sequence_batch_to_html_gifs,
+    tensor_summary,
 )
 
 
@@ -107,7 +104,7 @@ class Trainer(BaseTrainer):
                 0,
                 self.config.H // 2 - 4 : self.config.H // 2 + 4,
                 self.config.W // 2 - 4 : self.config.W // 2 + 4,
-            ] = torch.tensor(1.0)
+            ] = torch.tensor(2.0)
             # state[:, 0, :, :] = torch.tensor(1.0)  # start with uniform mass distribution
         elif self.config.mass_conserving == "cross_channel":
             state[
@@ -116,15 +113,16 @@ class Trainer(BaseTrainer):
                 self.config.H // 2 - 4 : self.config.H // 2 + 4,
                 self.config.W // 2 - 4 : self.config.W // 2 + 4,
             ] = torch.tensor(1.0)
-            state[:, 1, :, :] = torch.tensor(6.0)  # start with uniform mass distribution
-
+            state[:, 1, :, :] = torch.tensor(
+                6.0
+            )  # start with uniform mass distribution
 
         state[:, :, self.config.H // 2, self.config.W // 2] = msg
 
         return state
-    
+
     def threshold_state(self, state):
-        state = torch.where(state < 1., torch.zeros_like(state), state)
+        state = torch.where(state < 1.0, torch.zeros_like(state), state)
         return state
 
     def optim_step(self, steps):
@@ -138,9 +136,9 @@ class Trainer(BaseTrainer):
         initial_state = self._make_init_state(msg)
         out1 = self.nca(initial_state, steps=steps)
         final_frame = out1[:, -1, :1]
-        # noised_final_frame = self.noiser(final_frame)
 
-        gaussian_noise = torch.randn_like(final_frame) * 0.5
+        # noised_final_frame = self.noiser(final_frame)
+        gaussian_noise = torch.randn_like(final_frame) * (final_frame ** (1 / 3)) / 2.5
         noised_final_frame = final_frame + gaussian_noise
 
         # thresholded = (noised_final_frame >= 0.5).to(noised_final_frame.dtype)
@@ -164,13 +162,17 @@ class Trainer(BaseTrainer):
         else:
             loss = F.cross_entropy(out_msg, out)
 
+        grads = torch.tensor([0], dtype=torch.float32)
         if torch.is_grad_enabled():
             self.optim.zero_grad()
             loss.backward()
-            self.optim.step()
 
             self.learning_steps += 1
             self.history.append({"loss": loss.item()})
+            grads = [
+                p.grad.detach().cpu() for p in self.parameters() if p.grad is not None
+            ]
+            self.optim.step()
 
         info = {
             "loss": loss.item(),
@@ -182,6 +184,7 @@ class Trainer(BaseTrainer):
             "msg": msg,
             "frames": [f.detach().cpu() for f in frames],
             "noised_frames": [f.detach().cpu() for f in noised_frames],
+            "grads": grads,
         }
 
         return info
@@ -203,36 +206,37 @@ class Trainer(BaseTrainer):
         stats = f"""
             ```
             optim step: {self.learning_steps}
-            min max : {info['rollout'].min().item():.4f}, {info['rollout'].max().item():.4f}
-            mean std: {info['rollout'].mean().item():.4f}, {info['rollout'].std().item():.4f}
+            frame  : {tensor_summary(info["rollout"])}
+            weights: {tensor_summary(self.parameters())}
+            grads  : {tensor_summary(info["grads"])}
             mass: {info['final_frame'].sum().item():.4f}
             ```
             """
 
-        return pn.Column(
-            pn.Row(
-                stats,
+        return pn.Row(
+            pn.Column(
                 pn.pane.Matplotlib(
                     fig, format="svg", width=500, height=250, tight=True
                 ),
-                self.display_mass(info),
-            ),
-            pn.pane.HTML(
-                sequence_batch_to_html_gifs(
-                    rollout,
-                    columns=to_show,
-                    width=100,
-                    height=100,
-                    fps=20,
-                    return_html=True,
-                )
-            ),
-            pn.Row(plot_bars(info["input_msg"][:to_show])),
-            pn.Row(*image_row([f[:to_show] for f in info["frames"]], columns=to_show)),
-            pn.Row(
-                *image_row(
+                pn.pane.HTML(
+                    sequence_batch_to_html_gifs(
+                        rollout,
+                        columns=to_show,
+                        width=100,
+                        height=100,
+                        fps=20,
+                        return_html=True,
+                    )
+                ),
+                pn.Row(plot_bars(info["input_msg"][:to_show])),
+                image_row([f[:to_show] for f in info["frames"]], columns=to_show),
+                image_row(
                     [f[:to_show] for f in info["noised_frames"]], columns=to_show
-                )
+                ),
+            ),
+            pn.Column(
+                stats,
+                self.display_mass(info),
             ),
         )
 
@@ -266,6 +270,7 @@ class Trainer(BaseTrainer):
         ax.set_title("Mass channel sum over time")
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Mass sum")
+        # ax.set_yscale("log")
         plt.close()
 
         return pn.pane.Matplotlib(fig, format="svg", width=500, height=250, tight=True)
@@ -289,6 +294,7 @@ class Trainer(BaseTrainer):
         ax.set_ylabel("Entropy")
         ax.set_title("Entropy over time (sample 0)")
         ax.legend(ncol=2, fontsize=8)
+        ax.set_yscale("log")
         plt.close()
 
         return pn.Column(

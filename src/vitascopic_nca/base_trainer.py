@@ -4,10 +4,12 @@ import uuid
 from datetime import datetime
 
 import torch
+import torch.nn as nn
 
 
-class BaseTrainer:
+class BaseTrainer(nn.Module):
     def __init__(self, checkpoint_path):
+        super().__init__()
         self.checkpoint_path = checkpoint_path
         self.name = (
             f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
@@ -52,7 +54,7 @@ class BaseTrainer:
     def load_trainer(root):
         with open(os.path.join(root, "self.pkl"), "rb") as f:
             trainer = pickle.load(f)
-        trainer.load_last_checkpoint()
+        # trainer.load_last_checkpoint()
         return trainer
 
     @classmethod
@@ -64,3 +66,6 @@ class BaseTrainer:
         )
         root = os.path.join(checkpoint_path, latest_dir)
         return cls.load_trainer(root)
+
+    def model_checksum(model):
+        return sum(p.abs().sum().item() for p in model.parameters())
