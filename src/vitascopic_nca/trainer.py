@@ -6,8 +6,14 @@ import torch
 from vitascopic_nca.base_trainer import BaseTrainer
 from vitascopic_nca.decoder import Decoder
 from vitascopic_nca.nca import NeuralCA
-from vitascopic_nca.utils import impact_frames, sequence_batch_to_html_gifs
-from vitascopic_nca.entropy_metrics import global_entropy_over_time, per_channel_entropy_over_time
+from vitascopic_nca.utils import impact_frames, sequence_batch_to_html_gifs, image_row
+from vitascopic_nca.entropy_metrics import (
+    global_entropy_over_time,
+    per_channel_entropy_over_time,
+    spatial_mass_entropy_over_time,
+)
+from vitascopic_nca.stimuli import Stimuli
+
 
 
 class SampleMsgGenerator:
@@ -39,6 +45,7 @@ class Trainer(BaseTrainer):
             padding_type=config.padding_type,
             mass_conserving=config.mass_conserving,
         ).to(config.device)
+
         self.config = config
         if config.loss_type == "mse":
             self.msg_generator = SampleMsgGenerator(config.channels, config.device)
@@ -56,16 +63,21 @@ class Trainer(BaseTrainer):
             self.config.batch_size, self.nca.channels, self.config.H, self.config.W
         ).to(self.config.device)
 
-        if self.config.mass_conserving:
+        if self.config.mass_conserving != "no":
             state[
                 :,
                 0,
                 self.config.H // 2 - 4 : self.config.H // 2 + 4,
                 self.config.W // 2 - 4 : self.config.W // 2 + 4,
             ] = torch.tensor(1.0)
+            # state[:, 0, :, :] = torch.tensor(1.0)  # start with uniform mass distribution
 
         state[:, :, self.config.H // 2, self.config.W // 2] = msg
 
+        return state
+    
+    def threshold_state(self, state):
+        state = torch.where(state < 1., torch.zeros_like(state), state)
         return state
 
     def optim_step(self, steps):
@@ -188,12 +200,14 @@ class Trainer(BaseTrainer):
 
         H_global = global_entropy_over_time(sample).cpu().numpy()
         H_channels = per_channel_entropy_over_time(sample).cpu().numpy()
+        H_mass = spatial_mass_entropy_over_time(sample.unsqueeze(0)).cpu().numpy()[0]
 
         fig, ax = plt.subplots(1, 1, figsize=(8, 4))
-        # for c in range(H_channels.shape[1]): 
-        for c in range(3): # remember only first 3 channels are shown
-            ax.plot(H_channels[:, c], alpha=0.6, label=f"Channel {c}")
-        ax.plot(H_global, color="black", linewidth=2, label="Global entropy")
+        for c in range(min(3, H_channels.shape[1])):  # show first 3 channels
+            ax.plot(H_channels[:, c], alpha=0.5, label=f"Value ent ch {c}")
+        ax.plot(H_mass, alpha=0.9, linestyle="--", label=f"Mass ent")
+
+        ax.plot(H_global, color="black", linewidth=2, label="Global entropy (values)")
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Entropy")
         ax.set_title("Entropy over time (sample 0)")
