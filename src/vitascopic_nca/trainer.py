@@ -175,24 +175,23 @@ class Trainer(BaseTrainer):
         rollout = impact_frames(rollout, ts=[0, steps], ns=[5, 20])
         rollout = rollout[:, :, 0]
 
+        stats = f"""
+            ```
+            optim step: {self.learning_steps}
+            min max : {info['rollout'].min().item():.4f}, {info['rollout'].max().item():.4f}
+            mean std: {info['rollout'].mean().item():.4f}, {info['rollout'].std().item():.4f}
+            mass: {info['final_frame'].sum().item():.4f}
+            ```
+            """
+
         return pn.Column(
-            f"**Optimization Step (loss={info['loss']:.4f}, optim steps={self.learning_steps})**",
             pn.Row(
+                stats,
                 pn.pane.Matplotlib(
                     fig, format="svg", width=500, height=250, tight=True
                 ),
                 self.display_mass(info),
             ),
-            f"""
-            ```
-            Rollout min max : {info['rollout'].min().item():.4f}, {info['rollout'].max().item():.4f}
-            Rollout mean std: {info['rollout'].mean().item():.4f}, {info['rollout'].std().item():.4f}
-            Total mass: {info['final_frame'].sum().item():.4f}
-            ```
-            """,
-            pn.Row(plot_bars(info["input_msg"][:to_show])),
-            pn.Row(*image_row(info["frames"], columns=to_show)),
-            pn.Row(*image_row(info["noised_frames"], columns=to_show)),
             pn.pane.HTML(
                 sequence_batch_to_html_gifs(
                     rollout,
@@ -201,6 +200,13 @@ class Trainer(BaseTrainer):
                     height=100,
                     fps=20,
                     return_html=True,
+                )
+            ),
+            pn.Row(plot_bars(info["input_msg"][:to_show])),
+            pn.Row(*image_row([f[:to_show] for f in info["frames"]], columns=to_show)),
+            pn.Row(
+                *image_row(
+                    [f[:to_show] for f in info["noised_frames"]], columns=to_show
                 )
             ),
         )
@@ -227,7 +233,8 @@ class Trainer(BaseTrainer):
             for i in range(mass_sums.shape[0]):
                 ax.plot(
                     mass_sums[i].numpy(),
-                    alpha=0.6 if i == 0 else 0.3,
+                    alpha=1 if dim == 0 else 0.5,
+                    linewidth=2 if dim == 0 else 0.1,
                     c="tab:orange" if dim == 0 else "tab:gray",
                 )
 
