@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from vitascopic_nca.mass_conservation import mass_conserving_update
+from vitascopic_nca.mass_conservation import mass_conserving_update, cross_channel_mass_conserving_update
 
 
 class NeuralCA(nn.Module):
@@ -49,6 +49,9 @@ class NeuralCA(nn.Module):
         self.padding_type = padding_type
         self.beta = beta
 
+        assert mass_conserving in ["no", "normal", "cross_channel"], "Bad mass_conserving option"
+
+
         if zero_initialization:
             nn.init.zeros_(self.rule[-1].weight)
 
@@ -65,7 +68,7 @@ class NeuralCA(nn.Module):
                 groups=self.channels,
             )
             delta = self.rule(delta)
-            if self.mass_conserving:
+            if self.mass_conserving == "normal":
                 affinity = delta[:, :1]
                 q = x[:, :1]
                 q_next = mass_conserving_update(
@@ -75,6 +78,25 @@ class NeuralCA(nn.Module):
                     padding_type=self.padding_type,
                 )
                 x = torch.cat([q_next, x[:, 1:] + delta[:, 1:]], dim=1)
+            elif self.mass_conserving == "cross_channel":
+                affinity_0 = delta[:, :1]
+                q = x[:, :1]
+                q_next = mass_conserving_update(
+                    beta=self.beta,
+                    q=q,
+                    affinity=affinity_0,
+                    padding_type=self.padding_type,
+                )
+
+                affinities = delta[:,1:]
+                q_next_w_cross = cross_channel_mass_conserving_update(
+                    beta=self.beta,
+                    qs=x[:,1:],
+                    affinities=affinities,
+                    padding_type=self.padding_type,
+                )
+
+                x = torch.cat([q_next, q_next_w_cross], dim=1)
             else:
                 x = x + delta
 
@@ -83,7 +105,7 @@ class NeuralCA(nn.Module):
             )
 
             life_mask = (pre_life_mask & post_life_mask).to(x.dtype)
-            if self.alive_threshold > 0 and not self.mass_conserving:
+            if self.alive_threshold > 0 and (self.mass_conserving == "no"):
                 x = x * life_mask
 
             seq.append(x)
