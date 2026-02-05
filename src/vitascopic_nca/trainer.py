@@ -80,6 +80,7 @@ class Trainer(BaseTrainer):
         )
         self.learning_steps = 0
         self.noiser = Noiser()
+        self.zeroing_thr = -17
 
     def _make_init_state(self, msg):
         state = torch.zeros(
@@ -109,11 +110,20 @@ class Trainer(BaseTrainer):
         initial_state = self._make_init_state(msg)
         out1 = self.nca(initial_state, steps=steps)
         final_frame = out1[:, -1, :1]
-        # gaussian_noise = torch.randn_like(final_frame) * 0.1
-        # noised_final_frame = final_frame + gaussian_noise
+        gaussian_noise = torch.randn_like(final_frame) * 0.0
+        noised_final_frame = final_frame + gaussian_noise
+        #noised_final_frame = self.noiser(final_frame)
 
-        noised_final_frame = self.noiser(final_frame)
+        #thresholded = (noised_final_frame >= 0.5).to(noised_final_frame.dtype)
+
+        if self.learning_steps % 300 == 0:
+            if self.zeroing_thr < -2:
+                self.zeroing_thr +=1
+            print(self.learning_steps, self.zeroing_thr)
+
+        noised_final_frame[:,:,:self.zeroing_thr] = 0
         out_msg = self.decoder(noised_final_frame)
+
         frames = [final_frame]
         noised_frames = [noised_final_frame]
 

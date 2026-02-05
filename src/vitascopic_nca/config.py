@@ -40,3 +40,4 @@ class DefaultTrainerConfig(
     W = 32
     device = "cuda"
     checkpoint_path = "./checkpoints"
+    mass_conserving = True
