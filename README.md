@@ -8,10 +8,10 @@
 
 **Sample of robust generations**
 
-<img alt="Sample output" src="./assets/sample1.gif" width="650px">
+<img alt="Sample output" src="./assets/sample1.gif" width="650px"/>
 
 
-### What is our project about?
+## What is our project about?
 
 - What is life?
   - I know it when I see it
@@ -19,7 +19,7 @@
   - From the point of view of **Information Theory**
   - **Some machinery that preserves information in a noisy environment**
 
-**Our approach in a diagram**
+## Our approach in a diagram
 
 ![diagram](./assets/diagram.svg)
 
@@ -48,8 +48,6 @@ The DNA information has to be encoded in the form and robust to perturbations.
 - Multi-species
 - Get published in Nature
 
-
-
 <img alt="meet the team" src="./assets/chia.jpg" width="650px">
 
-> Brought to you by the **chia** team ❤️
+> Brought to you by the **Chia** team ❤️
