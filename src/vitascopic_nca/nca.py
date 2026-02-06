@@ -64,7 +64,7 @@ class NeuralCA(nn.Module):
     def forward(self, x, steps):
         seq = [x]
 
-        for _ in range(steps):
+        for s in range(steps):
             x_padded = F.pad(x, (1, 1, 1, 1), self.padding_type)
             pre_life_mask = self.alive(x_padded, self.alive_threshold)
 

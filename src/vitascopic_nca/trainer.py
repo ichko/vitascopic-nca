@@ -33,7 +33,8 @@ class SampleMsgGenerator(nn.Module):
         self.device = device
 
     def forward(self, batch_size):
-        x = torch.randn(batch_size, self.msg_size).to(self.device)
+        x = torch.rand(batch_size, self.msg_size).to(self.device)
+        x = (x > 0.7).float()
         return x, x
 
 
@@ -131,6 +132,7 @@ class Trainer(BaseTrainer):
             steps = torch.randint(l, r, (1,)).item()
 
         msg, out = self.msg_generator(self.config.batch_size)
+        msg[:, 13:] = 0
         msg[:, 0] = 1  # Otherwise alive masking will not alow it to grow
 
         initial_state = self._make_init_state(msg)
@@ -138,18 +140,18 @@ class Trainer(BaseTrainer):
         # stimuli = Stimuli(initial_state=initial_state)
         # out1 = self.nca(initial_state, steps=5)
         # out1_usable = out1[:,-1]
-        # stim = stimuli.add_stimuli(initial_state)
+        # initial_state = stimuli.add_stimuli(initial_state)
 
-        out1 = self.nca(initial_state, steps=steps)
+        out = self.nca(initial_state, steps=steps)
 
-        final_frame = out1[:, -1, :1]
+        final_frame = out[:, -1, :1]
 
         noisesize = torch.sqrt(final_frame)
         gaussian_noise = torch.randn_like(final_frame) * noisesize
 
-        # final_frame = stimuli.add_stimuli_noise(final_frame=final_frame)
-
-        noised_final_frame = final_frame + gaussian_noise * 0.001
+        noised_final_frame = final_frame + gaussian_noise * 0.8
+        noised_final_frame = self.noiser(noised_final_frame)
+        # noised_final_frame = stimuli.add_stimuli_noise(noised_final_frame)
 
         # thresholded = (noised_final_frame >= 0.5).to(noised_final_frame.dtype)
 
@@ -164,11 +166,9 @@ class Trainer(BaseTrainer):
         frames = [final_frame]
         noised_frames = [noised_final_frame]
 
-        # mass_threshold = 2000.0
-        # total_mass_loss = 0.5 * torch.relu(final_frame.sum() - mass_threshold)
-
         if self.config.loss_type == "mse":
             loss = F.mse_loss(out_msg, msg)
+            # loss = F.binary_cross_entropy_with_logits(out_msg, msg)
         else:
             loss = F.cross_entropy(out_msg, out)
 
@@ -176,13 +176,13 @@ class Trainer(BaseTrainer):
         if torch.is_grad_enabled():
             self.optim.zero_grad()
             loss.backward()
+            self.optim.step()
 
             self.learning_steps += 1
             self.history.append({"loss": loss.item()})
-            grads = [
-                p.grad.detach().cpu() for p in self.parameters() if p.grad is not None
-            ]
-            self.optim.step()
+            # grads = [ This is makes things slow
+            #     p.grad.detach().cpu() for p in self.parameters() if p.grad is not None
+            # ]
 
         info = {
             "loss": loss.item(),
@@ -190,7 +190,7 @@ class Trainer(BaseTrainer):
             "input_msg": msg.detach().cpu(),
             "output_msg": out_msg.detach().cpu(),
             "final_frame": final_frame.detach().cpu(),
-            "rollout": torch.cat([out1], dim=1).detach().cpu(),
+            "rollout": torch.cat([out], dim=1).detach().cpu(),
             "msg": msg,
             "frames": [f.detach().cpu() for f in frames],
             "noised_frames": [f.detach().cpu() for f in noised_frames],
@@ -207,7 +207,7 @@ class Trainer(BaseTrainer):
         ax.set_yscale("log")
         plt.close()
 
-        to_show = 8
+        to_show = 32
         steps = info["rollout"].shape[1] - 1
         rollout = info["rollout"][:to_show, :, :1]
         rollout = impact_frames(rollout, ts=[0, steps], ns=[5, 20])
@@ -231,7 +231,7 @@ class Trainer(BaseTrainer):
                 pn.pane.HTML(
                     sequence_batch_to_html_gifs(
                         rollout,
-                        columns=to_show,
+                        columns=8,
                         width=100,
                         height=100,
                         fps=20,
@@ -269,6 +269,7 @@ class Trainer(BaseTrainer):
             if normalize:
                 mass_sums = mass_sums / (mass_sums[:, :1] + 1e-8)
 
+            ax.axhline(0, linewidth=0.5, color="tab:grey", linestyle="--")
             for i in range(mass_sums.shape[0]):
                 ax.plot(
                     mass_sums[i].numpy(),
