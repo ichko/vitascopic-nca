@@ -1,4 +1,4 @@
-## Artificial Life In Cellular Encoding
+## Artificial Life In Cellular Encodings (ALICE)
 
 **Emergent Structures noisy channel message passing with an NCA**
 
