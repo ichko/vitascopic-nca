@@ -1,5 +1,9 @@
 ## Noisy Autodecoder on NCA
 
+- [🛝 Slides Presented at ALICE 2026](https://docs.google.com/presentation/d/1Oq30wTO-09B-4H93yZqvRRwuLmzqTTj888eYLTN5fSM/edit?usp=sharing)
+- [🐇 ALICE26 Workshop Website](https://aliceworkshop.org/)
+- [⚠️ Project website WIP](https://www.izhv.eu/vitascopic-nca/)
+
 Defining life is outside of the scope of this project, but most will agree: Life is symbiogenetic, low-entropic patterns that are robust to changes in their environment. This is true for bacteria, cells and elephants.  
 
 This project is about the automatic search for patterns of this kind, which is why we are presenting: The _VitaScope™_.
