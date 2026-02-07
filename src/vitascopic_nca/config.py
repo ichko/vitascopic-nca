@@ -21,14 +21,14 @@ class DefaultNCAConfig:
 class DefaultOptimizationConfig:
     loss_type: Literal["mse", "clf"] = "mse"
     lr = 0.0001
-    batch_size = 8
+    batch_size = 24
 
 
 @dataclass(frozen=True)
 class DefaultDecoderConfig:
     n_layers = 3
     hidden_dim = 32
-    in_dim = 1
+    in_dim = 3
     pooling_fn = torch.amax
 
 
