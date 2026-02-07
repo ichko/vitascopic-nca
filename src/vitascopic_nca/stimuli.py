@@ -7,7 +7,7 @@ class Stimuli:
     def __init__(self, initial_state):
         # self.initial_state = initial_state # batch_size, channels, H, W
         N = 1
-        R = 8
+        R = 0.1
         sigma = R / 2.0
         # add N Gaussian blobs (periodic boundaries) to the initial state as stimuli
         self.stimuli = torch.zeros_like(initial_state[:, :1, :, :])  # only 1 channel for stimuli
@@ -27,7 +27,7 @@ class Stimuli:
 
             r2 = dist_x**2 + dist_y**2
             gaussian = torch.exp(-r2.float() / (2 * sigma**2))
-
+            gaussian = gaussian.to(initial_state.device)
             center_mask = r2 <= 2**2
 
             self.stimuli_centers[:, :, center_mask] = 1.  # set stimulus center value to 1
