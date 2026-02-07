@@ -27,13 +27,27 @@ from vitascopic_nca.utils import (
 
 
 class SampleMsgGenerator(nn.Module):
-    def __init__(self, msg_size, device):
+    def __init__(self, msg_size, device, _type):
         super().__init__()
         self.msg_size = msg_size
         self.device = device
+        self.type = _type
+
+        if _type == "DNA":
+            assert (msg_size - 1) % 4 == 0, "For DNA type, msg_size must be 1 + multiple of 4"
 
     def forward(self, batch_size):
-        x = torch.randn(batch_size, self.msg_size).to(self.device)
+        if not self.type == "DNA":
+            x = torch.randn(batch_size, self.msg_size).to(self.device)
+        else:
+            # onehot encode 4xn bits
+            x = torch.zeros(batch_size, self.msg_size).to(self.device)
+
+            for i in range((x.shape[1]-1)//4):
+                indices = torch.randint(0, 4, (batch_size,)).to(self.device)
+                x[:, 1 + i*4: 1+(i+1)*4].scatter_(1, indices.unsqueeze(1), 1)
+            
+
         return x, x
 
 
@@ -136,6 +150,7 @@ class Trainer(BaseTrainer):
         initial_state = self._make_init_state(msg)
 
         # stimuli = Stimuli(initial_state=initial_state)
+
         # out1 = self.nca(initial_state, steps=5)
         # out1_usable = out1[:,-1]
         # stim = stimuli.add_stimuli(initial_state)
@@ -149,7 +164,7 @@ class Trainer(BaseTrainer):
 
         # final_frame = stimuli.add_stimuli_noise(final_frame=final_frame)
 
-        noised_final_frame = final_frame + gaussian_noise * 0.001
+        noised_final_frame = final_frame + gaussian_noise * 0.1
 
         # thresholded = (noised_final_frame >= 0.5).to(noised_final_frame.dtype)
 

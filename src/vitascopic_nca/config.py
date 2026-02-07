@@ -6,14 +6,14 @@ import torch
 
 @dataclass(frozen=True)
 class DefaultNCAConfig:
-    channels = 16
+    channels = 9
     hidden_channels = 128
     fire_rate = 0.9
     alive_threshold = 0.1
     zero_initialization = False
     mass_conserving: Literal["no", "normal", "cross_channel"] = "normal"
     padding_type: Literal["circular", "constant"] = "circular"
-    beta = 50
+    beta = 1.
     num_embs = 5
 
 
