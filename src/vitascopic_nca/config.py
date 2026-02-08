@@ -12,7 +12,7 @@ class DefaultNCAConfig:
     fire_rate = 0.9
     alive_threshold = 0.1
     zero_initialization = False
-    mass_conserving: Literal["no", "normal", "cross_channel"] = "no"
+    mass_conserving: Literal["no", "normal", "cross_channel"] = "normal"
     padding_type: Literal["circular", "constant"] = "circular"
     beta = 1.
     num_embs = 5

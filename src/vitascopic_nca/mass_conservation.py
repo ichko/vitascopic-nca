@@ -31,6 +31,7 @@ def cross_channel_mass_conserving_update(beta, qs, affinities, padding_type):
     expected to be passed in.
     """
 
+
     # normal
     channel_count = qs.shape[1]
     weights = torch.exp(beta * affinities)
@@ -45,13 +46,18 @@ def cross_channel_mass_conserving_update(beta, qs, affinities, padding_type):
 
     q_next = weights * incoming
 
-    # cross channel
+  # cross channel
     weights_cross = torch.exp(beta * affinities)
-    Z_cross = weights_cross.sum(dim=1, keepdim=True) 
 
-    q_over_Z_cross = q_next / (Z_cross + EPS)
+    # normalize weights across channels 
+    Z_cross = weights_cross.sum(dim=1, keepdim=True)
 
-    q_next_w_cross = (q_over_Z_cross * weights_cross)	
+    weights_cross_normalized = weights_cross / (Z_cross + EPS)
+
+    q_total = q_next.sum(dim=1, keepdim=True)
+
+    q_next_w_cross = weights_cross_normalized * q_total
+
 
     return q_next_w_cross
 

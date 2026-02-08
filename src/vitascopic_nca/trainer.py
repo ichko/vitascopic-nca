@@ -119,7 +119,7 @@ class Trainer(BaseTrainer):
                 : self.config.visual_channels,
                 self.config.H // 2 - 4 : self.config.H // 2 + 4,
                 self.config.W // 2 - 4 : self.config.W // 2 + 4,
-            ] = torch.tensor(3.0 - self.config.visual_channels, device=state.device)  # start with uniform mass distribution in visual channels
+            ] = torch.tensor(2.0 , device=state.device)  # start with uniform mass distribution in visual channels
             # state[:, 0, :, :] = torch.tensor(1.0)  # start with uniform mass distribution
         elif self.config.mass_conserving == "cross_channel":
             raise NotImplementedError("Cross-channel mass conservation not implemented yet")
@@ -129,7 +129,7 @@ class Trainer(BaseTrainer):
                 : self.config.visual_channels,
                 self.config.H // 2: self.config.H // 2,
                 self.config.W // 2: self.config.W // 2,
-            ] = torch.tensor(1.0 - self.config.visual_channels, device=state.device)  # to break up alivemasking
+            ] = torch.tensor(1.0 , device=state.device)  # to break up alivemasking
 
         state[:, self.config.visual_channels:, self.config.H // 2, self.config.W // 2] = msg
 
