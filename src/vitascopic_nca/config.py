@@ -6,15 +6,17 @@ import torch
 
 @dataclass(frozen=True)
 class DefaultNCAConfig:
-    channels = 9
+    message_channels = 12
+    visual_channels = 3
     hidden_channels = 128
     fire_rate = 0.9
     alive_threshold = 0.1
     zero_initialization = False
-    mass_conserving: Literal["no", "normal", "cross_channel"] = "normal"
+    mass_conserving: Literal["no", "normal", "cross_channel"] = "no"
     padding_type: Literal["circular", "constant"] = "circular"
     beta = 1.
     num_embs = 5
+    msg_type: Literal["DNA", "random"] = "random"
 
 
 @dataclass(frozen=True)
@@ -38,5 +40,5 @@ class DefaultTrainerConfig(
 ):
     H = 32
     W = 32
-    device = "cuda"
+    device = "cpu"
     checkpoint_path = "./checkpoints"

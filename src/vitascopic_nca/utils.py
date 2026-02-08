@@ -12,6 +12,7 @@ import panel as pn
 import seaborn as sns
 import torch
 
+from vitascopic_nca.base_trainer import BaseTrainer
 from vitascopic_nca.nca import NeuralCA
 
 
@@ -107,9 +108,16 @@ def sequence_batch_to_html_gifs(
     tensor, width, height, return_html=False, columns=8, fps=20
 ):
     tensor = tensor.detach().cpu().numpy()
-    tensor = media.to_rgb(tensor, cmap="viridis", vmin=0, vmax=1)
-    tensor = tensor[:, :, :, :, :3]
-
+    if tensor.shape[2] == 1:
+        tensor = media.to_rgb(tensor, cmap="viridis", vmin=0, vmax=1)
+    else:
+        # If there are more than 3 channels, just take the first 3 for visualization
+        tensor = tensor[:, :, :3, :, :]
+        # move channels to the end for media.show_videos, which expects (B, t, H, W, C)
+        tensor = np.transpose(tensor, (0, 1, 3, 4, 2))
+        # If there are exactly 3 channels, keep them as is. If there are fewer than 3 channels, the above line will just take what's available.
+        # make into RGB if it's not already
+        print("tensor.shape", tensor.shape)    
     return media.show_videos(
         tensor,
         titles=[f"#{i}" for i in range(tensor.shape[0])],
@@ -178,6 +186,8 @@ def export_neural_ca_to_json(
         "alive_threshold": float(model.alive_threshold),
         "fire_rate": float(getattr(model, "fire_rate", 1.0)),
         "padding_type": str(getattr(model, "padding_type", "circular")),
+        "mass_conserving": str(getattr(model, "mass_conserving", "no")),
+        "beta": float(getattr(model, "beta", 1.0)),
         "rule": {
             "conv1": {
                 "weight": conv1.weight.detach()
@@ -202,3 +212,47 @@ def export_neural_ca_to_json(
 
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+
+    print(f"Exported NeuralCA model to {out_path.resolve()}")
+
+
+def export_checkpoint_to_json(
+    checkpoint_dir: Union[str, Path],
+    out_path: Union[str, Path],
+    model_name: str | None = None,
+) -> None:
+    """
+    Load a trainer checkpoint (from a directory containing 'self.pkl') and export
+    its NCA model to JSON.
+
+    Args:
+        checkpoint_dir: Path to the checkpoint directory (e.g., containing 'self.pkl')
+        out_path: Where to write the JSON file
+        model_name: Optional name for the model. If None, uses the checkpoint directory name.
+
+    Example:
+        >>> export_checkpoint_to_json(
+        ...     checkpoint_dir="./checkpoints/20240101_120000_abc12345",
+        ...     out_path="./docs/models/my_nca.json",
+        ...     model_name="trained_nca_v1"
+        ... )
+    """
+    checkpoint_dir = Path(checkpoint_dir)
+    if not checkpoint_dir.exists():
+        raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
+
+    # Load the trainer from pickle
+    trainer = BaseTrainer.load_trainer(checkpoint_dir)
+
+    # Load the latest NCA weights
+    trainer.load_last_checkpoint()
+
+    # Extract the NCA model
+    nca = trainer.nca
+
+    # Use checkpoint dir name as default model name
+    if model_name is None:
+        model_name = checkpoint_dir.name
+
+    # Export to JSON
+    export_neural_ca_to_json(nca, out_path, model_name=model_name)
