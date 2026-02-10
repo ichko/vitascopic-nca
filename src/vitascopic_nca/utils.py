@@ -13,7 +13,6 @@ import seaborn as sns
 import torch
 
 from vitascopic_nca.base_trainer import BaseTrainer
-from vitascopic_nca.nca import NeuralCA
 
 
 def impact_frames(x, ts, ns):
@@ -32,8 +31,8 @@ def image_row(frame_batches, columns):
                 media.show_images(
                     frame_batch[:, 0],
                     columns=columns,
-                    width=100,
-                    height=100,
+                    width=120,
+                    height=120,
                     cmap="viridis",
                     return_html=True,
                 )
@@ -41,6 +40,32 @@ def image_row(frame_batches, columns):
             for frame_batch in frame_batches
         ]
     )
+
+
+def make_sobel_kernels(size: int):
+    assert size % 2 == 1 and size >= 3, "sobel_size must be odd and >= 3"
+
+    # Binomial coefficients for smoothing
+    def binomial(n):
+        row = [1]
+        for _ in range(n):
+            row = [1] + [row[i] + row[i + 1] for i in range(len(row) - 1)] + [1]
+        return torch.tensor(row)
+
+    smooth_1d = binomial(size - 1)
+    deriv_1d = torch.zeros(size)
+    deriv_1d[0] = -1
+    deriv_1d[-1] = 1
+
+    smooth_1d = smooth_1d / smooth_1d.sum()
+
+    sobel_x = torch.outer(smooth_1d, deriv_1d)
+    sobel_y = torch.outer(deriv_1d, smooth_1d)
+
+    identity = torch.zeros(size, size)
+    identity[size // 2, size // 2] = 1.0
+
+    return identity, sobel_x, sobel_y
 
 
 def tensor_summary(T):
@@ -67,6 +92,7 @@ def from_batch_to_DNA_string(batch):
             string += characters[idx]
         strings.append(string)
     return strings
+
 
 def plot_bars(batch1, batch2, loss_type):
     if loss_type == "mse" or loss_type == "clf":
@@ -117,8 +143,10 @@ def plot_bars(batch1, batch2, loss_type):
 
         fig = g.figure
         plt.close(fig)
-    
-        return pn.pane.Matplotlib(fig, format="svg", width=50 * D, height=110, tight=True)
+
+        return pn.pane.Matplotlib(
+            fig, format="svg", width=50 * D, height=110, tight=True
+        )
 
     elif loss_type == "DNA":
 
@@ -142,6 +170,7 @@ def sequence_batch_to_html_gifs(
     tensor = tensor.detach().cpu().numpy()
     if tensor.shape[2] == 1:
         tensor = media.to_rgb(tensor, cmap="viridis", vmin=0, vmax=1)
+        tensor = tensor[:, :, 0]
     else:
         # If there are more than 3 channels, just take the first 3 for visualization
         tensor = tensor[:, :, :3, :, :]
@@ -149,7 +178,7 @@ def sequence_batch_to_html_gifs(
         tensor = np.transpose(tensor, (0, 1, 3, 4, 2))
         # If there are exactly 3 channels, keep them as is. If there are fewer than 3 channels, the above line will just take what's available.
         # make into RGB if it's not already
-        print("tensor.shape", tensor.shape)    
+        print("tensor.shape", tensor.shape)
     return media.show_videos(
         tensor,
         titles=[f"#{i}" for i in range(tensor.shape[0])],
@@ -163,7 +192,7 @@ def sequence_batch_to_html_gifs(
 
 
 def export_neural_ca_to_json(
-    model: NeuralCA,
+    model,
     out_path: Union[str, Path],
     model_name: str = "neural_ca",
 ) -> None:

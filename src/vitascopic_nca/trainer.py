@@ -33,17 +33,15 @@ class SampleMsgGenerator(nn.Module):
         self.device = device
         self.msg = None
 
-
     def forward(self, batch_size):
         x = torch.randn(batch_size, self.msg_size).to(self.device)
         self.msg = x
         return x
 
     def loss(self, out_msg):
-
         return F.mse_loss(out_msg, self.msg)
-    
-    
+
+
 class DNAMsgGenerator(nn.Module):
     def __init__(self, msg_size, device):
         super().__init__()
@@ -64,6 +62,7 @@ class DNAMsgGenerator(nn.Module):
         out_msg = out_msg.view(out_msg.shape[0], -1, 4).softmax(dim=-1)
         return F.cross_entropy(out_msg.view(-1, 4), self.msg.view(-1))
 
+
 class EmbeddingMsgGenerator(nn.Module):
     def __init__(self, msg_size, num_embeddings, device):
         super().__init__()
@@ -72,13 +71,12 @@ class EmbeddingMsgGenerator(nn.Module):
         self.device = device
         self.embedding = nn.Embedding(num_embeddings, msg_size).to(device)
 
-
     def forward(self, batch_size):
         indices = torch.randint(0, self.num_embeddings, (batch_size,)).to(self.device)
         embs = self.embedding(indices)
         self.msg = indices
         return embs
-    
+
     def loss(self, out_msg):
         return F.cross_entropy(out_msg, self.msg)
 
@@ -86,11 +84,15 @@ class EmbeddingMsgGenerator(nn.Module):
 class Trainer(BaseTrainer):
     def __init__(self, config):
         super().__init__(config.checkpoint_path)
+        latent_dim = (
+            config.message_channels
+            if config.loss_type == "mse" or config.loss_type == "DNA"
+            else config.num_embs
+        )
+
         self.decoder = Decoder(
             in_dim=config.in_dim,
-            latent_dim=(
-                config.message_channels if config.loss_type == "mse" or config.loss_type == "DNA" else config.num_embs
-            ),
+            latent_dim=latent_dim,
             n_layers=config.n_layers,
             hidden_dim=config.hidden_dim,
             pooling_fn=config.pooling_fn,
@@ -110,12 +112,16 @@ class Trainer(BaseTrainer):
 
         self.config = config
         if config.loss_type == "mse":
-            self.msg_generator = SampleMsgGenerator(config.message_channels, config.device)
+            self.msg_generator = SampleMsgGenerator(
+                config.message_channels, config.device
+            )
         elif config.loss_type == "DNA":
             self.msg_generator = DNAMsgGenerator(config.message_channels, config.device)
         else:
             self.msg_generator = EmbeddingMsgGenerator(
-                config.message_channels, num_embeddings=config.num_embs, device=config.device
+                config.message_channels,
+                num_embeddings=config.num_embs,
+                device=config.device,
             )
         self.history = []
         self.optim = torch.optim.Adam(
@@ -130,7 +136,10 @@ class Trainer(BaseTrainer):
 
     def _make_init_state(self, msg):
         state = torch.zeros(
-            self.config.batch_size, self.nca.total_channels, self.config.H, self.config.W
+            self.config.batch_size,
+            self.nca.total_channels,
+            self.config.H,
+            self.config.W,
         ).to(self.config.device)
 
         if self.config.mass_conserving == "normal":
@@ -139,19 +148,27 @@ class Trainer(BaseTrainer):
                 : self.config.visual_channels,
                 self.config.H // 2 - 4 : self.config.H // 2 + 4,
                 self.config.W // 2 - 4 : self.config.W // 2 + 4,
-            ] = torch.tensor(2.0 , device=state.device)  # start with uniform mass distribution in visual channels
+            ] = torch.tensor(
+                2.0, device=state.device
+            )  # start with uniform mass distribution in visual channels
             # state[:, 0, :, :] = torch.tensor(1.0)  # start with uniform mass distribution
         elif self.config.mass_conserving == "cross_channel":
-            raise NotImplementedError("Cross-channel mass conservation not implemented yet")
+            raise NotImplementedError(
+                "Cross-channel mass conservation not implemented yet"
+            )
         else:
             state[
                 :,
                 : self.config.visual_channels,
-                self.config.H // 2: self.config.H // 2,
-                self.config.W // 2: self.config.W // 2,
-            ] = torch.tensor(1.0 , device=state.device)  # to break up alivemasking
+                self.config.H // 2 : self.config.H // 2,
+                self.config.W // 2 : self.config.W // 2,
+            ] = torch.tensor(
+                1.0, device=state.device
+            )  # to break up alivemasking
 
-        state[:, self.config.visual_channels:, self.config.H // 2, self.config.W // 2] = msg
+        state[
+            :, self.config.visual_channels :, self.config.H // 2, self.config.W // 2
+        ] = msg
 
         return state
 
@@ -165,6 +182,7 @@ class Trainer(BaseTrainer):
             steps = torch.randint(l, r, (1,)).item()
 
         msg = self.msg_generator(self.config.batch_size)
+        msg[:, 0] = 1  # Otherwise alive masking will not alow it to grow
 
         initial_state = self._make_init_state(msg)
 
@@ -176,7 +194,7 @@ class Trainer(BaseTrainer):
 
         out = self.nca(initial_state, steps=steps)
 
-        final_frame = out[:, -1, :self.config.visual_channels]
+        final_frame = out[:, -1, : self.config.visual_channels]
 
         # noisesize = torch.sqrt(final_frame)
         # gaussian_noise = torch.randn_like(final_frame) * noisesize
@@ -196,22 +214,20 @@ class Trainer(BaseTrainer):
 
         # noised_final_frame[:, :, : self.zeroing_thr] = 0
         # print("NFF", noised_final_frame)
-        
+
         # check if nans in noised_final_frame
         if torch.isnan(noised_final_frame).any():
             print("noised_final_frame has nans")
-        
+
         # check final_frame stats
         if torch.isnan(final_frame).any():
             print("final_frame has nans")
-
 
         out_msg = self.decoder(noised_final_frame)
         # print("out_msg", out_msg)
 
         frames = [final_frame]
         noised_frames = [noised_final_frame]
-
 
         loss = self.msg_generator.loss(out_msg)
 
@@ -250,16 +266,17 @@ class Trainer(BaseTrainer):
         ax.set_yscale("log")
         plt.close()
 
-        to_show = 32
+        to_show = 5
         steps = info["rollout"].shape[1] - 1
 
         # rollout: (B, T, C, H, W)
 
-        rollout = info["rollout"][:to_show, :, :self.config.visual_channels]
+        rollout = info["rollout"][:to_show, :, : self.config.visual_channels]
         # rollout = impact_frames(rollout, ts=[0, steps], ns=[5, 20])
         # rollout = rollout[:, :, :self.config.visual_channels]
-        rollout = rollout[:, :, :self.config.visual_channels]  # only show first 3 channels for visualization
-
+        rollout = rollout[
+            :, :, : self.config.visual_channels
+        ]  # only show first 3 channels for visualization
 
         stats = f"""
             ```
@@ -280,13 +297,17 @@ class Trainer(BaseTrainer):
                     sequence_batch_to_html_gifs(
                         rollout,
                         columns=8,
-                        width=100,
-                        height=100,
+                        width=120,
+                        height=120,
                         fps=20,
                         return_html=True,
                     )
                 ),
-                plot_bars(info["input_msg"][:to_show], info["output_msg"][:to_show], self.config.loss_type),
+                plot_bars(
+                    info["input_msg"][:to_show],
+                    info["output_msg"][:to_show],
+                    self.config.loss_type,
+                ),
                 image_row([f[:to_show] for f in info["frames"]], columns=to_show),
                 image_row(
                     [f[:to_show] for f in info["noised_frames"]], columns=to_show
