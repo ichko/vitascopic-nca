@@ -69,9 +69,11 @@ def cross_channel_mass_conserving_update(beta, qs, affinities, padding_type):
     weights_cross = torch.exp(beta * affinities)
     Z_cross = weights_cross.sum(dim=1, keepdim=True)
 
-    q_over_Z_cross = q_next / (Z_cross + EPS)
+    weights_cross_normalized = weights_cross / (Z_cross + EPS)
 
-    q_next_w_cross = q_over_Z_cross * weights_cross
+    q_total = q_next.sum(dim=1, keepdim=True)
+
+    q_next_w_cross = weights_cross_normalized * q_total
 
     return q_next_w_cross
 

@@ -9,25 +9,44 @@ import torch.nn.functional as F
 
 from vitascopic_nca.base_trainer import BaseTrainer
 from vitascopic_nca.decoder import Decoder
-from vitascopic_nca.entropy_metrics import (global_entropy_over_time,
-                                            per_channel_entropy_over_time,
-                                            spatial_mass_entropy_over_time)
+from vitascopic_nca.entropy_metrics import (
+    global_entropy_over_time,
+    per_channel_entropy_over_time,
+    spatial_mass_entropy_over_time,
+)
 from vitascopic_nca.nca import NeuralCA
 from vitascopic_nca.noise import Noiser
 from vitascopic_nca.stimuli import Stimuli
-from vitascopic_nca.utils import (image_row, impact_frames, plot_bars,
-                                  sequence_batch_to_html_gifs, tensor_summary)
+from vitascopic_nca.utils import (
+    image_row,
+    impact_frames,
+    plot_bars,
+    sequence_batch_to_html_gifs,
+    tensor_summary,
+)
 
 
 class SampleMsgGenerator(nn.Module):
-    def __init__(self, msg_size, device):
+    def __init__(self, msg_size, device, msg_type):
         super().__init__()
         self.msg_size = msg_size
         self.device = device
+        self.msg_type = msg_type
+
+        if msg_type == "DNA":
+            assert (msg_size) % 4 == 0, "For DNA type, msg_size must bemultiple of 4"
 
     def forward(self, batch_size):
-        x = torch.rand(batch_size, self.msg_size).to(self.device)
-        x = (x > 0.7).float()
+        if not self.msg_type == "DNA":
+            x = torch.randn(batch_size, self.msg_size).to(self.device)
+        else:
+            # onehot encode 4xn bits
+            x = torch.zeros(batch_size, self.msg_size).to(self.device)
+
+            for i in range((x.shape[1]) // 4):
+                indices = torch.randint(0, 4, (batch_size,)).to(self.device)
+                x[:, i * 4 : (i + 1) * 4].scatter_(1, indices.unsqueeze(1), 1)
+
         return x, x
 
 
@@ -51,7 +70,9 @@ class Trainer(BaseTrainer):
         self.decoder = Decoder(
             in_dim=config.in_dim,
             latent_dim=(
-                config.channels if config.loss_type == "mse" else config.num_embs
+                config.message_channels
+                if config.loss_type == "mse"
+                else config.num_embs
             ),
             n_layers=config.n_layers,
             hidden_dim=config.hidden_dim,
@@ -59,7 +80,7 @@ class Trainer(BaseTrainer):
             padding_type=config.padding_type,
         ).to(config.device)
         self.nca = NeuralCA(
-            channels=config.channels,
+            message_channels=config.message_channels,
             hidden_channels=config.hidden_channels,
             fire_rate=config.fire_rate,
             alive_threshold=config.alive_threshold,
@@ -67,14 +88,19 @@ class Trainer(BaseTrainer):
             padding_type=config.padding_type,
             mass_conserving=config.mass_conserving,
             beta=config.beta,
+            visual_channels=config.visual_channels,
         ).to(config.device)
 
         self.config = config
         if config.loss_type == "mse":
-            self.msg_generator = SampleMsgGenerator(config.channels, config.device)
+            self.msg_generator = SampleMsgGenerator(
+                config.message_channels, config.device, msg_type=config.msg_type
+            )
         else:
             self.msg_generator = EmbeddingMsgGenerator(
-                config.channels, num_embeddings=config.num_embs, device=config.device
+                config.message_channels,
+                num_embeddings=config.num_embs,
+                device=config.device,
             )
         self.history = []
         self.optim = torch.optim.Adam(
@@ -89,29 +115,39 @@ class Trainer(BaseTrainer):
 
     def _make_init_state(self, msg):
         state = torch.zeros(
-            self.config.batch_size, self.nca.channels, self.config.H, self.config.W
+            self.config.batch_size,
+            self.nca.total_channels,
+            self.config.H,
+            self.config.W,
         ).to(self.config.device)
 
         if self.config.mass_conserving == "normal":
             state[
                 :,
-                0,
-                self.config.H // 2 - 5 : self.config.H // 2 + 5,
-                self.config.W // 2 - 5 : self.config.W // 2 + 5,
-            ] = torch.tensor(2.0)
-            # state[:, 0, :, :] = torch.tensor(1.0)  # start with uniform mass distribution
-        elif self.config.mass_conserving == "cross_channel":
-            state[
-                :,
-                0,
+                : self.config.visual_channels,
                 self.config.H // 2 - 4 : self.config.H // 2 + 4,
                 self.config.W // 2 - 4 : self.config.W // 2 + 4,
-            ] = torch.tensor(1.0)
-            state[:, 1, :, :] = torch.tensor(
-                6.0
-            )  # start with uniform mass distribution
+            ] = torch.tensor(
+                2.0, device=state.device
+            )  # start with uniform mass distribution in visual channels
+            # state[:, 0, :, :] = torch.tensor(1.0)  # start with uniform mass distribution
+        elif self.config.mass_conserving == "cross_channel":
+            raise NotImplementedError(
+                "Cross-channel mass conservation not implemented yet"
+            )
+        else:
+            state[
+                :,
+                : self.config.visual_channels,
+                self.config.H // 2 : self.config.H // 2,
+                self.config.W // 2 : self.config.W // 2,
+            ] = torch.tensor(
+                1.0, device=state.device
+            )  # to break up alivemasking
 
-        state[:, :, self.config.H // 2, self.config.W // 2] = msg
+        state[
+            :, self.config.visual_channels :, self.config.H // 2, self.config.W // 2
+        ] = msg
 
         return state
 
@@ -130,19 +166,22 @@ class Trainer(BaseTrainer):
         initial_state = self._make_init_state(msg)
 
         # stimuli = Stimuli(initial_state=initial_state)
+
         # out1 = self.nca(initial_state, steps=5)
         # out1_usable = out1[:,-1]
         # initial_state = stimuli.add_stimuli(initial_state)
 
         out = self.nca(initial_state, steps=steps)
 
-        final_frame = out[:, -1, :1]
+        final_frame = out[:, -1, : self.config.visual_channels]
 
-        noisesize = torch.sqrt(final_frame)
-        gaussian_noise = torch.randn_like(final_frame) * noisesize
+        # noisesize = torch.sqrt(final_frame)
+        # gaussian_noise = torch.randn_like(final_frame) * noisesize
 
-        noised_final_frame = final_frame + gaussian_noise * 0.8
-        noised_final_frame = self.noiser(noised_final_frame)
+        # noised_final_frame = final_frame + gaussian_noise * 0.8
+
+        noised_final_frame = final_frame
+        # noised_final_frame = self.noiser(noised_final_frame)
         # noised_final_frame = stimuli.add_stimuli_noise(noised_final_frame)
 
         # thresholded = (noised_final_frame >= 0.5).to(noised_final_frame.dtype)
@@ -153,7 +192,18 @@ class Trainer(BaseTrainer):
         #     print(self.learning_steps, self.zeroing_thr)
 
         # noised_final_frame[:, :, : self.zeroing_thr] = 0
+        # print("NFF", noised_final_frame)
+
+        # check if nans in noised_final_frame
+        if torch.isnan(noised_final_frame).any():
+            print("noised_final_frame has nans")
+
+        # check final_frame stats
+        if torch.isnan(final_frame).any():
+            print("final_frame has nans")
+
         out_msg = self.decoder(noised_final_frame)
+        # print("out_msg", out_msg)
 
         frames = [final_frame]
         noised_frames = [noised_final_frame]
@@ -201,9 +251,15 @@ class Trainer(BaseTrainer):
 
         to_show = 5
         steps = info["rollout"].shape[1] - 1
-        rollout = info["rollout"][:to_show, :, :1]
-        rollout = impact_frames(rollout, ts=[0, steps], ns=[5, 20])
-        rollout = rollout[:, :, 0]
+
+        # rollout: (B, T, C, H, W)
+
+        rollout = info["rollout"][:to_show, :, : self.config.visual_channels]
+        # rollout = impact_frames(rollout, ts=[0, steps], ns=[5, 20])
+        # rollout = rollout[:, :, :self.config.visual_channels]
+        rollout = rollout[
+            :, :, : self.config.visual_channels
+        ]  # only show first 3 channels for visualization
 
         stats = f"""
             ```
@@ -230,7 +286,7 @@ class Trainer(BaseTrainer):
                         return_html=True,
                     )
                 ),
-                plot_bars(info["input_msg"][:to_show], info["output_msg"][:to_show]),
+                # plot_bars(info["input_msg"][:to_show], info["output_msg"][:to_show]),
                 image_row([f[:to_show] for f in info["frames"]], columns=to_show),
                 image_row(
                     [f[:to_show] for f in info["noised_frames"]], columns=to_show

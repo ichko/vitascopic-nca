@@ -6,15 +6,17 @@ import torch
 
 @dataclass(frozen=True)
 class DefaultNCAConfig:
-    channels = 16
+    message_channels = 12
+    visual_channels = 3
     hidden_channels = 128
     fire_rate = 0.99
     alive_threshold = 0.1
     zero_initialization = False
     mass_conserving: Literal["no", "normal", "cross_channel"] = "normal"
     padding_type: Literal["circular", "constant"] = "circular"
-    beta = 1
+    beta = 1.0
     num_embs = 5
+    msg_type: Literal["DNA", "random"] = "random"
 
 
 @dataclass(frozen=True)
