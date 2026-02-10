@@ -27,29 +27,42 @@ from vitascopic_nca.utils import (
 
 
 class SampleMsgGenerator(nn.Module):
-    def __init__(self, msg_size, device, msg_type):
+    def __init__(self, msg_size, device):
         super().__init__()
         self.msg_size = msg_size
         self.device = device
-        self.msg_type = msg_type
+        self.msg = None
 
-        if msg_type == "DNA":
-            assert (msg_size) % 4 == 0, "For DNA type, msg_size must bemultiple of 4"
 
     def forward(self, batch_size):
-        if not self.msg_type == "DNA":
-            x = torch.randn(batch_size, self.msg_size).to(self.device)
-        else:
-            # onehot encode 4xn bits
-            x = torch.zeros(batch_size, self.msg_size).to(self.device)
+        x = torch.randn(batch_size, self.msg_size).to(self.device)
+        self.msg = x
+        return x
 
-            for i in range((x.shape[1])//4):
-                indices = torch.randint(0, 4, (batch_size,)).to(self.device)
-                x[:, i*4: (i+1)*4].scatter_(1, indices.unsqueeze(1), 1)
-            
+    def loss(self, out_msg):
 
-        return x, x
+        return F.mse_loss(out_msg, self.msg)
+    
+    
+class DNAMsgGenerator(nn.Module):
+    def __init__(self, msg_size, device):
+        super().__init__()
+        self.msg_size = msg_size
+        self.device = device
+        self.msg = None
 
+        assert (msg_size) % 4 == 0, "For DNA type, msg_size must bemultiple of 4"
+
+    def forward(self, batch_size):
+        n_tokens = self.msg_size // 4
+        indices = torch.randint(0, 4, (batch_size, n_tokens), device=self.device)
+        x = F.one_hot(indices, num_classes=4).float().view(batch_size, self.msg_size)
+        self.msg = indices  # store class indices
+        return x
+
+    def loss(self, out_msg):
+        out_msg = out_msg.view(out_msg.shape[0], -1, 4).softmax(dim=-1)
+        return F.cross_entropy(out_msg.view(-1, 4), self.msg.view(-1))
 
 class EmbeddingMsgGenerator(nn.Module):
     def __init__(self, msg_size, num_embeddings, device):
@@ -59,10 +72,15 @@ class EmbeddingMsgGenerator(nn.Module):
         self.device = device
         self.embedding = nn.Embedding(num_embeddings, msg_size).to(device)
 
+
     def forward(self, batch_size):
         indices = torch.randint(0, self.num_embeddings, (batch_size,)).to(self.device)
         embs = self.embedding(indices)
-        return embs, indices
+        self.msg = indices
+        return embs
+    
+    def loss(self, out_msg):
+        return F.cross_entropy(out_msg, self.msg)
 
 
 class Trainer(BaseTrainer):
@@ -71,7 +89,7 @@ class Trainer(BaseTrainer):
         self.decoder = Decoder(
             in_dim=config.in_dim,
             latent_dim=(
-                config.message_channels if config.loss_type == "mse" else config.num_embs
+                config.message_channels if config.loss_type == "mse" or config.loss_type == "DNA" else config.num_embs
             ),
             n_layers=config.n_layers,
             hidden_dim=config.hidden_dim,
@@ -92,7 +110,9 @@ class Trainer(BaseTrainer):
 
         self.config = config
         if config.loss_type == "mse":
-            self.msg_generator = SampleMsgGenerator(config.message_channels, config.device, msg_type = config.msg_type)
+            self.msg_generator = SampleMsgGenerator(config.message_channels, config.device)
+        elif config.loss_type == "DNA":
+            self.msg_generator = DNAMsgGenerator(config.message_channels, config.device)
         else:
             self.msg_generator = EmbeddingMsgGenerator(
                 config.message_channels, num_embeddings=config.num_embs, device=config.device
@@ -144,7 +164,7 @@ class Trainer(BaseTrainer):
             l, r = steps
             steps = torch.randint(l, r, (1,)).item()
 
-        msg, out = self.msg_generator(self.config.batch_size)
+        msg = self.msg_generator(self.config.batch_size)
 
         initial_state = self._make_init_state(msg)
 
@@ -192,11 +212,8 @@ class Trainer(BaseTrainer):
         frames = [final_frame]
         noised_frames = [noised_final_frame]
 
-        if self.config.loss_type == "mse":
-            loss = F.mse_loss(out_msg, msg)
-            # loss = F.binary_cross_entropy_with_logits(out_msg, msg)
-        else:
-            loss = F.cross_entropy(out_msg, out)
+
+        loss = self.msg_generator.loss(out_msg)
 
         grads = torch.tensor([0], dtype=torch.float32)
         if torch.is_grad_enabled():
@@ -269,7 +286,7 @@ class Trainer(BaseTrainer):
                         return_html=True,
                     )
                 ),
-                # plot_bars(info["input_msg"][:to_show], info["output_msg"][:to_show]),
+                plot_bars(info["input_msg"][:to_show], info["output_msg"][:to_show], self.config.loss_type),
                 image_row([f[:to_show] for f in info["frames"]], columns=to_show),
                 image_row(
                     [f[:to_show] for f in info["noised_frames"]], columns=to_show
