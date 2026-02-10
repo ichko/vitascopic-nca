@@ -9,21 +9,14 @@ import torch.nn.functional as F
 
 from vitascopic_nca.base_trainer import BaseTrainer
 from vitascopic_nca.decoder import Decoder
-from vitascopic_nca.entropy_metrics import (
-    global_entropy_over_time,
-    per_channel_entropy_over_time,
-    spatial_mass_entropy_over_time,
-)
+from vitascopic_nca.entropy_metrics import (global_entropy_over_time,
+                                            per_channel_entropy_over_time,
+                                            spatial_mass_entropy_over_time)
 from vitascopic_nca.nca import NeuralCA
 from vitascopic_nca.noise import Noiser
 from vitascopic_nca.stimuli import Stimuli
-from vitascopic_nca.utils import (
-    image_row,
-    impact_frames,
-    plot_bars,
-    sequence_batch_to_html_gifs,
-    tensor_summary,
-)
+from vitascopic_nca.utils import (image_row, impact_frames, plot_bars,
+                                  sequence_batch_to_html_gifs, tensor_summary)
 
 
 class SampleMsgGenerator(nn.Module):
@@ -103,8 +96,8 @@ class Trainer(BaseTrainer):
             state[
                 :,
                 0,
-                self.config.H // 2 - 4 : self.config.H // 2 + 4,
-                self.config.W // 2 - 4 : self.config.W // 2 + 4,
+                self.config.H // 2 - 5 : self.config.H // 2 + 5,
+                self.config.W // 2 - 5 : self.config.W // 2 + 5,
             ] = torch.tensor(2.0)
             # state[:, 0, :, :] = torch.tensor(1.0)  # start with uniform mass distribution
         elif self.config.mass_conserving == "cross_channel":
@@ -132,7 +125,6 @@ class Trainer(BaseTrainer):
             steps = torch.randint(l, r, (1,)).item()
 
         msg, out = self.msg_generator(self.config.batch_size)
-        msg[:, 13:] = 0
         msg[:, 0] = 1  # Otherwise alive masking will not alow it to grow
 
         initial_state = self._make_init_state(msg)
@@ -207,7 +199,7 @@ class Trainer(BaseTrainer):
         ax.set_yscale("log")
         plt.close()
 
-        to_show = 32
+        to_show = 5
         steps = info["rollout"].shape[1] - 1
         rollout = info["rollout"][:to_show, :, :1]
         rollout = impact_frames(rollout, ts=[0, steps], ns=[5, 20])
@@ -232,8 +224,8 @@ class Trainer(BaseTrainer):
                     sequence_batch_to_html_gifs(
                         rollout,
                         columns=8,
-                        width=100,
-                        height=100,
+                        width=120,
+                        height=120,
                         fps=20,
                         return_html=True,
                     )

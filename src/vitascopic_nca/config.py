@@ -8,12 +8,12 @@ import torch
 class DefaultNCAConfig:
     channels = 16
     hidden_channels = 128
-    fire_rate = 0.9
+    fire_rate = 0.99
     alive_threshold = 0.1
     zero_initialization = False
     mass_conserving: Literal["no", "normal", "cross_channel"] = "normal"
     padding_type: Literal["circular", "constant"] = "circular"
-    beta = 5
+    beta = 1
     num_embs = 5
 
 
@@ -27,8 +27,8 @@ class DefaultOptimizationConfig:
 @dataclass(frozen=True)
 class DefaultDecoderConfig:
     n_layers = 3
-    hidden_dim = 32
-    in_dim = 3
+    hidden_dim = 128
+    in_dim = 1
     pooling_fn = torch.amax
 
 
@@ -36,7 +36,7 @@ class DefaultDecoderConfig:
 class DefaultTrainerConfig(
     DefaultNCAConfig, DefaultOptimizationConfig, DefaultDecoderConfig
 ):
-    H = 32
-    W = 32
+    H = 64
+    W = 64
     device = "cuda"
     checkpoint_path = "./checkpoints"

@@ -6,6 +6,7 @@ from vitascopic_nca.mass_conservation import (
     cross_channel_mass_conserving_update,
     mass_conserving_update,
 )
+from vitascopic_nca.utils import make_sobel_kernels
 
 
 class NeuralCA(nn.Module):
@@ -27,13 +28,15 @@ class NeuralCA(nn.Module):
         alive_threshold,
         zero_initialization,
         mass_conserving,
+        kernel_size=7,
         padding_type="circular",
         beta=1,
     ) -> None:
         super().__init__()
-        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]) / 8
-        sobel_y = torch.tensor([[1, 2, 1], [0, 0, 0], [-1, -2, -1]]) / 8
-        identity = torch.tensor([[0, 0, 0], [0, 1, 0], [0, 0, 0]])
+
+        identity, sobel_x, sobel_y = make_sobel_kernels(kernel_size)
+        self.kernel_size = kernel_size
+        self.padding_size = kernel_size // 2  # same padding
 
         all_filters = torch.stack((identity, sobel_x, sobel_y))
         all_filters_batch = all_filters.repeat(channels, 1, 1).unsqueeze(1)
@@ -63,13 +66,14 @@ class NeuralCA(nn.Module):
 
     def forward(self, x, steps):
         seq = [x]
+        pad = self.kernel_size // 2
 
         for s in range(steps):
-            x_padded = F.pad(x, (1, 1, 1, 1), self.padding_type)
+            x_padded = F.pad(x, (pad,) * 4, self.padding_type)
             pre_life_mask = self.alive(x_padded, self.alive_threshold)
 
             delta = F.conv2d(
-                F.pad(x, (1, 1, 1, 1), self.padding_type),
+                F.pad(x, (pad,) * 4, self.padding_type),
                 self.all_filters_batch,
                 groups=self.channels,
             )
@@ -82,6 +86,7 @@ class NeuralCA(nn.Module):
                     q=q,
                     affinity=affinity,
                     padding_type=self.padding_type,
+                    pad=pad,
                 )
                 x = torch.cat([q_next, x[:, 1:] + delta[:, 1:]], dim=1)
             elif self.mass_conserving == "cross_channel":
@@ -92,6 +97,7 @@ class NeuralCA(nn.Module):
                     q=q,
                     affinity=affinity_0,
                     padding_type=self.padding_type,
+                    pad=pad,
                 )
 
                 affinities = delta[:, 1:]
@@ -108,7 +114,7 @@ class NeuralCA(nn.Module):
             torch.clip_(x, -2, 2)
 
             post_life_mask = self.alive(
-                F.pad(x, (1, 1, 1, 1), self.padding_type), self.alive_threshold
+                F.pad(x, (pad,) * 4, self.padding_type), self.alive_threshold
             )
 
             life_mask = (pre_life_mask & post_life_mask).to(x.dtype)
