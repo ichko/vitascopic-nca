@@ -21,7 +21,7 @@ class DefaultNCAConfig:
 
 @dataclass
 class DefaultOptimizationConfig:
-    loss_type: Literal["mse", "clf"] = "mse"
+    loss_type: Literal["mse", "clf", "DNA"] = "DNA"
     lr: float = 0.0001
     batch_size: int = 24
 
