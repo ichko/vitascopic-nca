@@ -1,44 +1,46 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Callable, Literal
 
 import torch
 
 
-@dataclass(frozen=True)
+@dataclass
 class DefaultNCAConfig:
-    message_channels = 12
-    visual_channels = 3
-    hidden_channels = 128
-    fire_rate = 0.99
-    alive_threshold = 0.1
-    zero_initialization = False
+    message_channels: int = 12
+    visual_channels: int = 3
+    hidden_channels: int = 128
+    fire_rate: float = 0.99
+    alive_threshold: float = 0.1
+    zero_initialization: bool = False
     mass_conserving: Literal["no", "normal", "cross_channel"] = "normal"
     padding_type: Literal["circular", "constant"] = "circular"
-    beta = 1.0
-    num_embs = 5
+    beta: float = 1.0
+    num_embs: int = 5
     msg_type: Literal["DNA", "random"] = "random"
 
 
-@dataclass(frozen=True)
+@dataclass
 class DefaultOptimizationConfig:
     loss_type: Literal["mse", "clf"] = "mse"
-    lr = 0.0001
-    batch_size = 24
+    lr: float = 0.0001
+    batch_size: int = 24
 
 
-@dataclass(frozen=True)
+@dataclass
 class DefaultDecoderConfig:
-    n_layers = 3
-    hidden_dim = 128
-    in_dim = 1
-    pooling_fn = torch.amax
+    n_layers: int = 3
+    hidden_dim: int = 128
+    in_dim: int = 1
+    pooling_fn: Callable = torch.amax
 
 
-@dataclass(frozen=True)
+@dataclass
 class DefaultTrainerConfig(
-    DefaultNCAConfig, DefaultOptimizationConfig, DefaultDecoderConfig
+    DefaultNCAConfig,
+    DefaultOptimizationConfig,
+    DefaultDecoderConfig,
 ):
-    H = 64
-    W = 64
-    device = "cuda"
-    checkpoint_path = "./checkpoints"
+    H: int = 64
+    W: int = 64
+    device: str = "cuda"
+    checkpoint_path: str = "./checkpoints"

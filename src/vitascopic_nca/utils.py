@@ -13,7 +13,6 @@ import seaborn as sns
 import torch
 
 from vitascopic_nca.base_trainer import BaseTrainer
-from vitascopic_nca.nca import NeuralCA
 
 
 def impact_frames(x, ts, ns):
