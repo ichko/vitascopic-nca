@@ -16,12 +16,11 @@ class DefaultNCAConfig:
     padding_type: Literal["circular", "constant"] = "circular"
     beta = 1.
     num_embs = 5
-    msg_type: Literal["DNA", "random"] = "random"
 
 
 @dataclass(frozen=True)
 class DefaultOptimizationConfig:
-    loss_type: Literal["mse", "clf"] = "mse"
+    loss_type: Literal["mse", "clf", "DNA"] = "DNA"
     lr = 0.0001
     batch_size = 24
 
@@ -40,5 +39,5 @@ class DefaultTrainerConfig(
 ):
     H = 32
     W = 32
-    device = "cpu"
+    device = "cuda"
     checkpoint_path = "./checkpoints"

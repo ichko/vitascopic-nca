@@ -53,55 +53,87 @@ def tensor_summary(T):
     )
 
 
-def plot_bars(batch1, batch2):
-    B, D = batch1.shape
-    df1 = pd.DataFrame(
-        {
-            "batch": np.repeat(np.arange(B), D),
-            "dim": np.tile(np.arange(D), B),
-            "value": batch1.reshape(-1),
-            "source": "batch1",
-        }
-    )
-    df2 = pd.DataFrame(
-        {
-            "batch": np.repeat(np.arange(B), D),
-            "dim": np.tile(np.arange(D), B),
-            "value": batch2.reshape(-1),
-            "source": "batch2",
-        }
-    )
+def from_batch_to_DNA_string(batch):
+    # batch shape (B, D)
+    characters = ["A", "C", "G", "T"]
+    strings = []
 
-    df = pd.concat([df1, df2], axis=0)
+    reshaped = batch.view(batch.shape[0], -1, 4)  # reshape to (B, D//4, 4)
 
-    g = sns.catplot(
-        data=df,
-        kind="bar",
-        x="dim",
-        y="value",
-        hue="source",
-        col="batch",
-        sharey=True,
-        height=1.8,
-        aspect=0.9,
-        alpha=0.8,  # transparency
-        dodge=False,  # stack on top of each other
-        legend=False,
-    )
+    for sample in reshaped:
+        string = ""
+        for group in sample:
+            idx = torch.argmax(group).item()  # get index of max value in the group of 4
+            string += characters[idx]
+        strings.append(string)
+    return strings
 
-    # Clean up axes
-    for ax in g.axes.flat:
-        ax.set_ylabel(None)
-        ax.set_xlabel("")
-        ax.set_xticks([])
-        ax.tick_params(bottom=False)
+def plot_bars(batch1, batch2, loss_type):
+    if loss_type == "mse" or loss_type == "clf":
 
-    g.set_titles("")
+        B, D = batch1.shape
+        df1 = pd.DataFrame(
+            {
+                "batch": np.repeat(np.arange(B), D),
+                "dim": np.tile(np.arange(D), B),
+                "value": batch1.reshape(-1),
+                "source": "batch1",
+            }
+        )
+        df2 = pd.DataFrame(
+            {
+                "batch": np.repeat(np.arange(B), D),
+                "dim": np.tile(np.arange(D), B),
+                "value": batch2.reshape(-1),
+                "source": "batch2",
+            }
+        )
 
-    fig = g.figure
-    plt.close(fig)
+        df = pd.concat([df1, df2], axis=0)
 
-    return pn.pane.Matplotlib(fig, format="svg", width=50 * D, height=110, tight=True)
+        g = sns.catplot(
+            data=df,
+            kind="bar",
+            x="dim",
+            y="value",
+            hue="source",
+            col="batch",
+            sharey=True,
+            height=1.8,
+            aspect=0.9,
+            alpha=0.8,  # transparency
+            dodge=False,  # stack on top of each other
+            legend=False,
+        )
+
+        # Clean up axes
+        for ax in g.axes.flat:
+            ax.set_ylabel(None)
+            ax.set_xlabel("")
+            ax.set_xticks([])
+            ax.tick_params(bottom=False)
+
+        g.set_titles("")
+
+        fig = g.figure
+        plt.close(fig)
+    
+        return pn.pane.Matplotlib(fig, format="svg", width=50 * D, height=110, tight=True)
+
+    elif loss_type == "DNA":
+
+        strings1 = from_batch_to_DNA_string(batch1)
+        strings2 = from_batch_to_DNA_string(batch2)
+
+        # show side by side in a table
+        table = "<table><tr><th>Batch</th><th>Input Msg</th><th>Output Msg</th></tr>"
+        for i, (s1, s2) in enumerate(zip(strings1, strings2)):
+            table += f"<tr><td>{i}</td><td>{s1}</td><td>{s2}</td></tr>"
+        table += "</table>"
+        return pn.pane.HTML(table)
+
+    else:
+        return pn.pane.Markdown("No bar plot for loss type: " + loss_type)
 
 
 def sequence_batch_to_html_gifs(
