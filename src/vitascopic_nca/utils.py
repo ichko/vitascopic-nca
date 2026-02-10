@@ -135,6 +135,7 @@ def sequence_batch_to_html_gifs(
     tensor = tensor.detach().cpu().numpy()
     if tensor.shape[2] == 1:
         tensor = media.to_rgb(tensor, cmap="viridis", vmin=0, vmax=1)
+        tensor = tensor[:, :, 0]
     else:
         # If there are more than 3 channels, just take the first 3 for visualization
         tensor = tensor[:, :, :3, :, :]
